@@ -1,0 +1,424 @@
+{
+  "name": "Crypto Funding Rates",
+  "nodes": [
+    {
+      "id": "cron-trigger",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerOn": true,
+              "cronExpression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "notes": "FAST: Trigger every 5 minutes, 24/7. Feed-agnostic architecture with standard output schema."
+    },
+    {
+      "id": "loris-api",
+      "name": "Loris API Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.loris.tools/funding",
+        "timeout": 10000,
+        "options": {}
+      },
+      "notes": "FAST: Fetch funding rates from Loris Tools. No API key required. Response: funding_rates[exchange][symbol]"
+    },
+    {
+      "id": "normalize",
+      "name": "Normalize Funding Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "jsCode": "// Normalize funding rates to standard schema\n// Symbols to watch and primary exchanges\nconst SYMBOLS_WATCH = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'AVAX', 'MATIC', 'LINK'];\nconst EXCHANGES_PRIMARY = ['binance', 'bybit', 'okx', 'hyperliquid'];\n\nconst rawData = $input.first().json;\nconst fundingRates = rawData.funding_rates || rawData;\nconst timestamp = new Date().toISOString();\n\nconst normalized = [];\n\nfor (const symbol of SYMBOLS_WATCH) {\n  const rates = {};\n  let totalRate = 0;\n  let exchangeCount = 0;\n  let minRate = Infinity;\n  let maxRate = -Infinity;\n\n  for (const exchange of EXCHANGES_PRIMARY) {\n    const raw = fundingRates?.[exchange]?.[symbol];\n    if (raw !== undefined && raw !== null) {\n      const pct = raw / 10000;\n      const annualized = pct * 3 * 365; // Funding typically every 8h\n      rates[exchange] = {\n        raw,\n        pct,\n        annualized\n      };\n      totalRate += pct;\n      exchangeCount++;\n      if (pct < minRate) minRate = pct;\n      if (pct > maxRate) maxRate = pct;\n    }\n  }\n\n  if (exchangeCount > 0) {\n    const avgRatePrimary = totalRate / exchangeCount;\n    const maxSpread = maxRate - minRate;\n\n    // Determine consensus\n    let consensus = 'MIXED';\n    if (avgRatePrimary > 0.001) {\n      consensus = 'POSITIVE';\n    } else if (avgRatePrimary < -0.001) {\n      consensus = 'NEGATIVE';\n    }\n\n    normalized.push({\n      symbol,\n      source: 'loris',\n      delay_minutes: 1,\n      timestamp,\n      rates,\n      avg_rate_primary: avgRatePrimary,\n      max_spread: maxSpread,\n      consensus,\n      oi_rank: SYMBOLS_WATCH.indexOf(symbol) + 1\n    });\n  }\n}\n\nreturn { json: { symbols: normalized, timestamp, source: 'loris' } };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Transform Loris API response to standard feed-agnostic schema. Values x10000 converted to decimal."
+    },
+    {
+      "id": "signal-detection",
+      "name": "Signal Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "parameters": {
+        "jsCode": "// Detect funding rate signals\nconst normalizedData = $input.first().json;\nconst symbols = normalizedData.symbols || [];\nconst timestamp = normalizedData.timestamp;\n\nconst signals = [];\nconst alerts = [];\n\n// Thresholds\nconst HIGH_FUNDING_POSITIVE = 0.0005; // 0.05%\nconst EXTREME_NEGATIVE = -0.0003; // -0.03%\nconst DIVERGENCE_THRESHOLD = 0.0008; // 0.08%\n\nfor (const item of symbols) {\n  const { symbol, avg_rate_primary, max_spread, rates, consensus } = item;\n\n  // Signal: ALTA FUNDING POSITIVO\n  if (avg_rate_primary > HIGH_FUNDING_POSITIVE) {\n    const signal = {\n      type: 'HIGH_POSITIVE_FUNDING',\n      symbol,\n      severity: avg_rate_primary > 0.001 ? 'HIGH' : 'MEDIUM',\n      message: `Funding positivo elevado: ${(avg_rate_primary * 100).toFixed(3)}% (anualizado ${(avg_rate_primary * 3 * 365 * 100).toFixed(1)}%)`,\n      interpretation: 'Muchos longs pagando shorts — mercado sobrecalentado long',\n      rates\n    };\n    signals.push(signal);\n    if (signal.severity === 'HIGH') {\n      alerts.push({ symbol, type: 'HIGH_POSITIVE_FUNDING', urgency: 'alta', data: signal });\n    }\n  }\n\n  // Signal: FUNDING NEGATIVO EXTREMO\n  if (avg_rate_primary < EXTREME_NEGATIVE) {\n    const signal = {\n      type: 'EXTREME_NEGATIVE_FUNDING',\n      symbol,\n      severity: 'HIGH',\n      message: `Funding negativo extremo: ${(avg_rate_primary * 100).toFixed(3)}%`,\n      interpretation: 'Shorts pagando longs — presión short extrema',\n      rates\n    };\n    signals.push(signal);\n    alerts.push({ symbol, type: 'EXTREME_NEGATIVE_FUNDING', urgency: 'alta', data: signal });\n  }\n\n  // Signal: DIVERGENCIA entre exchanges\n  if (max_spread > DIVERGENCE_THRESHOLD) {\n    const signal = {\n      type: 'FUNDING_DIVERGENCE',\n      symbol,\n      severity: 'MEDIUM',\n      message: `Divergencia: spread ${(max_spread * 100).toFixed(3)}% entre exchanges`,\n      interpretation: 'Desacuerdo entre exchanges sobre valoración del riesgo',\n      rates\n    };\n    signals.push(signal);\n  }\n}\n\n// Global reading\nconst positiveCount = symbols.filter(s => s.avg_rate_primary > HIGH_FUNDING_POSITIVE).length;\nconst negativeCount = symbols.filter(s => s.avg_rate_primary < EXTREME_NEGATIVE).length;\n\nlet globalReading = 'NEUTRAL';\nif (positiveCount >= 3) globalReading = 'OVERHEATED';\nelse if (negativeCount >= 2) globalReading = 'UNDERHEATED';\nelse if (positiveCount > negativeCount) globalReading = 'BULLISH_SKEW';\nelse if (negativeCount > positiveCount) globalReading = 'BEARISH_SKEW';\n\nreturn {\n  json: {\n    signals,\n    alerts,\n    global_reading: globalReading,\n    summary: {\n      positive_count: positiveCount,\n      negative_count: negativeCount,\n      total_symbols: symbols.length\n    },\n    symbols,\n    timestamp\n  }\n};",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Detect funding rate signals based on thresholds. Triggers alerts for HIGH severity."
+    },
+    {
+      "id": "format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "jsCode": "// Format human-readable summary\nconst signalData = $input.first().json;\nconst symbols = signalData.symbols || [];\nconst signals = signalData.signals || [];\nconst globalReading = signalData.global_reading || 'NEUTRAL';\nconst timestamp = new Date();\n\nconst fecha = timestamp.toISOString().split('T')[0];\nconst hora = timestamp.toTimeString().split(' ')[0];\n\nlet summary = `FUNDING RATES — ${fecha} ${hora}\\n`;\nsummary += `Fuente: Loris Tools (25+ exchanges)\\n`;\nsummary += `RESUMEN POR ACTIVO:\\n`;\n\nfor (const item of symbols) {\n  const { symbol, rates, consensus, avg_rate_primary } = item;\n  const rateStrings = [];\n  for (const [exchange, data] of Object.entries(rates)) {\n    rateStrings.push(`${exchange.charAt(0).toUpperCase() + exchange.slice(1)} ${(data.pct * 100).toFixed(2)}%`);\n  }\n  const rateStr = rateStrings.join(' | ');\n  summary += `${symbol}: ${rateStr} → Sesgo: ${consensus}\\n`;\n}\n\nif (signals.length > 0) {\n  summary += `\\nSEÑALES DETECTADAS:\\n`;\n  for (const signal of signals) {\n    if (signal.severity === 'HIGH') {\n      summary += `⚠️ ${signal.symbol}: ${signal.message} — ${signal.interpretation}\\n`;\n    }\n  }\n}\n\nsummary += `\\nLECTURA GLOBAL:\\n`;\nsummary += `Funding ${globalReading.toLowerCase()} en ${symbols.filter(s => s.consensus === 'POSITIVE').length} activos → mercado en modo ${globalReading}\\n`;\n\nreturn {\n  json: {\n    summary,\n    global_reading: globalReading,\n    signals,\n    symbols,\n    timestamp: signalData.timestamp\n  }\n};",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Format human-readable summary for display and notifications"
+    },
+    {
+      "id": "store-latest",
+      "name": "Store Latest",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1250, 150],
+      "parameters": {
+        "fileName": "/data/cache/funding_latest.json",
+        "data": "={{ JSON.stringify($('Format Summary').first().json) }}",
+        "options": {
+          "append": false,
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Store latest funding rates snapshot"
+    },
+    {
+      "id": "store-snapshot",
+      "name": "Store Snapshot TXT",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "fileName": "/data/cache/funding_snapshot.txt",
+        "data": "={{ $('Format Summary').first().json.summary }}",
+        "options": {
+          "append": false,
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Store human-readable snapshot"
+    },
+    {
+      "id": "store-history",
+      "name": "Store History",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1250, 450],
+      "parameters": {
+        "fileName": "/data/cache/funding_history.json",
+        "data": "={{ JSON.stringify($('Format Summary').first().json) }}",
+        "options": {
+          "append": true,
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Append to 12h history. Consider rotation in production."
+    },
+    {
+      "id": "store-signals",
+      "name": "Store Signals",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1250, 600],
+      "parameters": {
+        "fileName": "/data/cache/funding_signals.json",
+        "data": "={{ JSON.stringify($('Signal Detection').first().json.signals || []) }}",
+        "options": {
+          "append": false,
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Store latest detected signals"
+    },
+    {
+      "id": "webhook-snapshot",
+      "name": "Webhook: Snapshot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1500, 300],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "funding",
+        "responseMode": "responseNode",
+        "responseData": "={{ $json.summary }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Returns human-readable snapshot via GET /webhook/funding"
+    },
+    {
+      "id": "webhook-raw",
+      "name": "Webhook: Raw JSON",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 500],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://placeholder.invalid/webhook/funding-raw",
+        "timeout": 5000,
+        "options": {}
+      },
+      "notes": "FAST: Returns normalized JSON data via GET /webhook/funding-raw"
+    },
+    {
+      "id": "webhook-signals",
+      "name": "Webhook: Signals",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1500, 700],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "funding-signals",
+        "responseMode": "responseNode",
+        "responseData": "={{ JSON.stringify($('Signal Detection').first().json.signals || []) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Returns detected signals via GET /webhook/funding-signals"
+    },
+    {
+      "id": "webhook-symbol",
+      "name": "Webhook: By Symbol",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1750, 300],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "funding-symbol",
+        "responseMode": "responseNode",
+        "responseData": "={{ JSON.stringify($('Normalize Funding Data').first().json.symbols?.find(s => s.symbol === $parameter.symbol) || null) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Returns symbol-specific data via GET /webhook/funding-symbol"
+    },
+    {
+      "id": "check-alert",
+      "name": "Check Alert Urgency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 600],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "alert-urgency-check",
+              "leftValue": "={{ $('Signal Detection').first().json.alerts }}",
+              "rightValue": [],
+              "operator": {
+                "type": "boolean",
+                "operation": "notEqual"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "FAST: Branch if alerts exist"
+    },
+    {
+      "id": "send-alert",
+      "name": "Send Alert Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 750],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WEBHOOK_URL}}/webhook/crypto-alert",
+        "timeout": 10000,
+        "options": {}
+      },
+      "notes": "FAST: POST alert to crypto-alert webhook if urgency is alta"
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Loris API Feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loris API Feed": {
+      "main": [
+        [
+          {
+            "node": "Normalize Funding Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Funding Data": {
+      "main": [
+        [
+          {
+            "node": "Signal Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signal Detection": {
+      "main": [
+        [
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Alert Urgency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary": {
+      "main": [
+        [
+          {
+            "node": "Store Latest",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Snapshot TXT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store History",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Signals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook: Snapshot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook: Raw JSON",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook: Signals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook: By Symbol",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Alert Urgency": {
+      "main": [
+        [
+          {
+            "node": "Send Alert Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Latest": {
+      "main": [
+        []
+      ]
+    },
+    "Store Snapshot TXT": {
+      "main": [
+        []
+      ]
+    },
+    "Store History": {
+      "main": [
+        []
+      ]
+    },
+    "Store Signals": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook: Snapshot": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook: Raw JSON": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook: Signals": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook: By Symbol": {
+      "main": [
+        []
+      ]
+    },
+    "Send Alert Webhook": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeout": 120,
+    "maxTries": 1
+  },
+  "id": "crypto_funding_rates",
+  "meta": {
+    "templateCredsSetup": [],
+    "templateId": "crypto_funding_rates"
+  },
+  "versionId": "1",
+  "tags": [
+    {
+      "name": "crypto"
+    },
+    {
+      "name": "funding-rates"
+    },
+    {
+      "name": "loris-tools"
+    }
+  ]
+}

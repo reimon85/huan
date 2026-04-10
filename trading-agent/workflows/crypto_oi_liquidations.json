@@ -1,0 +1,370 @@
+{
+  "name": "crypto_oi_liquidations",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "node-trigger-cron",
+      "name": "Trigger Cron (15min)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.2,
+      "position": [100, 300],
+      "notes": "Executes every 15 minutes, 24/7 for OI and Liquidations data"
+    },
+    {
+      "parameters": {
+        "url": "https://loris.tools/oi",
+        "options": {
+          "timeout": 10000
+        },
+        "onError": "errorOutput"
+      },
+      "id": "node-fetch-oi",
+      "name": "Fetch OI Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 100],
+      "notes": "GET Open Interest data from Loris Tools"
+    },
+    {
+      "parameters": {
+        "url": "https://loris.tools/liquidations",
+        "options": {
+          "timeout": 10000
+        },
+        "onError": "errorOutput"
+      },
+      "id": "node-fetch-liquidations",
+      "name": "Fetch Liquidations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 300],
+      "notes": "GET Liquidations data from Loris Tools"
+    },
+    {
+      "parameters": {
+        "url": "https://loris.tools/volume",
+        "options": {
+          "timeout": 10000
+        },
+        "onError": "errorOutput"
+      },
+      "id": "node-fetch-volume",
+      "name": "Fetch Volume",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 500],
+      "notes": "GET Volume data from Loris Tools"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Open Interest Data\nconst oiData = $input.first().json;\n\n// Extract price data (assumed to be injected or fetched separately)\nconst currentPrices = {\n  BTC: oiData.btc_price || 0,\n  ETH: oiData.eth_price || 0,\n  SOL: oiData.sol_price || 0\n};\n\nconst normalizeExchangeData = (exchangeData) => {\n  const exchanges = {};\n  let total = 0;\n  \n  if (exchangeData) {\n    Object.entries(exchangeData).forEach(([ex, val]) => {\n      exchanges[ex.toLowerCase()] = val;\n      total += val;\n    });\n  }\n  \n  return { exchanges, total };\n};\n\nconst detectRegime = (oiChange, priceChange) => {\n  if (oiChange > 0 && priceChange > 0) return 'OI_RISING_PRICE';\n  if (oiChange > 0 && priceChange < 0) return 'OI_FALLING_PRICE';\n  if (oiChange < 0 && priceChange > 0) return 'SHORT_SQUEEZE';\n  if (oiChange < 0 && priceChange < 0) return 'DELVERAGING';\n  return 'NEUTRAL';\n};\n\nconst symbols = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'SOL'];\nconst normalizedOI = [];\n\nsymbols.forEach(symbol => {\n  const symbolKey = symbol.toLowerCase();\n  const oiSymbolData = oiData[symbolKey] || oiData[symbol] || {};\n  \n  const { exchanges, total: total_oi_usd } = normalizeExchangeData(oiSymbolData.exchanges || oiSymbolData);\n  const oi_change_1h_pct = oiSymbolData.change_1h || 0;\n  \n  // Regime detection (price change simulated - in production, compare with previous price)\n  const price = currentPrices[symbol] || 0;\n  const priceChange = oiSymbolData.price_change_1h || 0;\n  const regime = detectRegime(oi_change_1h_pct, priceChange);\n  \n  normalizedOI.push({\n    symbol,\n    exchanges,\n    total_oi_usd,\n    oi_change_1h_pct,\n    regime,\n    price,\n    price_change_1h_pct: priceChange\n  });\n});\n\nreturn [{ json: { oi_data: normalizedOI, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "node-normalize-oi",
+      "name": "Normalize OI Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 100],
+      "notes": "Normalize OI data to standard schema with regime detection"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Liquidations Data\nconst liqData = $input.first().json;\n\n// Extract liquidation data (structure varies by API response)\nconst total_liquidation_4h_usd = liqData.total_4h || liqData.total || 0;\nconst long_liquidations_4h = liqData.long_4h || liqData.long_liquidations || liqData.longs || 0;\nconst short_liquidations_4h = liqData.short_4h || liqData.short_liquidations || liqData.shorts || 0;\n\n// Build liquidation concentration (top liquidations by size)\nconst rawLiquidations = liqData.liquidations || liqData.concentration || [];\nconst liquidation_concentration = rawLiquidations\n  .slice(0, 20)\n  .map(liq => ({\n    price: liq.price || liq.p || 0,\n    side: liq.side || liq.type || 'unknown',\n    size: liq.size || liq.amount || liq.usd || 0,\n    timestamp: liq.time || liq.timestamp || null\n  }))\n  .sort((a, b) => b.size - a.size);\n\n// Additional metrics\nconst total_liquidation_1h_usd = liqData.total_1h || 0;\nconst long_liquidations_1h = liqData.long_1h || 0;\nconst short_liquidations_1h = liqData.short_1h || 0;\n\nconst normalizedLiquidations = {\n  total_liquidation_4h_usd,\n  long_liquidations_4h,\n  short_liquidations_4h,\n  liquidation_concentration,\n  total_liquidation_1h_usd,\n  long_liquidations_1h,\n  short_liquidations_1h,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{ json: normalizedLiquidations }];"
+      },
+      "id": "node-normalize-liquidations",
+      "name": "Normalize Liquidations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 300],
+      "notes": "Normalize liquidation data to standard schema"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Signal Detection for OI and Liquidations\nconst oiResult = $('Normalize OI Data').first().json;\nconst liqResult = $('Normalize Liquidations').first().json;\n\nconst oi_data = oiResult.oi_data;\nconst liq_data = liqResult;\n\nconst signals = {\n  oi_signals: [],\n  liquidation_signals: [],\n  alerts: [],\n  regime: 'NEUTRAL',\n  timestamp: new Date().toISOString()\n};\n\n// OI Regime Analysis\nconst btcOi = oi_data.find(d => d.symbol === 'BTC');\nconst ethOi = oi_data.find(d => d.symbol === 'ETH');\n\n// OI Signals\nif (btcOi) {\n  const { oi_change_1h_pct, regime, price_change_1h_pct } = btcOi;\n  \n  if (oi_change_1h_pct > 10) {\n    signals.alerts.push({\n      type: 'OI_CHANGE_ALERT',\n      symbol: 'BTC',\n      message: `OI cambio > 10% en 1h: ${oi_change_1h_pct.toFixed(2)}%`,\n      severity: 'HIGH'\n    });\n  }\n  \n  if (regime === 'OI_RISING_PRICE') {\n    signals.oi_signals.push('TENDENCIA_SANA: OI subiendo + precio subiendo');\n    signals.regime = 'OVERHEATED_MOMENTUM';\n  } else if (regime === 'OI_FALLING_PRICE') {\n    signals.oi_signals.push('CAPITULACION: OI subiendo + precio cayendo');\n    signals.regime = 'CAPITULATION';\n  } else if (regime === 'SHORT_SQUEEZE') {\n    signals.oi_signals.push('SHORT SQUEEZE: OI cayendo + precio subiendo');\n    signals.regime = 'SHORT_SQUEEZE';\n  } else if (regime === 'DELVERAGING') {\n    signals.oi_signals.push('DELEVERAGING: OI cayendo + precio cayendo');\n    signals.regime = 'DELEVERAGING';\n  }\n}\n\nif (ethOi && Math.abs(ethOi.oi_change_1h_pct) > 10) {\n  signals.alerts.push({\n    type: 'OI_CHANGE_ALERT',\n    symbol: 'ETH',\n    message: `ALERTA: cambio OI ETH > 10%: ${ethOi.oi_change_1h_pct.toFixed(2)}%`,\n    severity: 'MEDIUM'\n  });\n}\n\n// Liquidation Signals\nconst longLiq1h = liq_data.long_liquidations_1h || 0;\nconst shortLiq1h = liq_data.short_liquidations_1h || 0;\n\nif (longLiq1h > 100000000) {\n  signals.liquidation_signals.push(`CAPITULACION: Long liqs > $100M en 1h: $${(longLiq1h/1e6).toFixed(1)}M`);\n  signals.alerts.push({\n    type: 'LIQUIDATION_CAPITULATION',\n    message: `Long liquidations > $100M en 1h: $${(longLiq1h/1e6).toFixed(1)}M`,\n    severity: 'HIGH'\n  });\n}\n\nif (shortLiq1h > 50000000) {\n  signals.liquidation_signals.push(`SHORT SQUEEZE ACTIVO: Short liqs > $50M en 1h: $${(shortLiq1h/1e6).toFixed(1)}M`);\n  signals.alerts.push({\n    type: 'SHORT_SQUEEZE_SIGNAL',\n    message: `Short liquidations > $50M en 1h: $${(shortLiq1h/1e6).toFixed(1)}M`,\n    severity: 'MEDIUM'\n  });\n}\n\n// Combined regime assessment\nif (signals.alerts.length >= 2) {\n  signals.regime = 'HIGH_ALERT';\n}\n\nreturn [{ json: signals }];"
+      },
+      "id": "node-signal-detection",
+      "name": "Signal Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 200],
+      "notes": "Detect trading signals from OI and liquidation data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format Summary for Display\nconst oiResult = $('Normalize OI Data').first().json;\nconst liqResult = $('Normalize Liquidations').first().json;\nconst signalsResult = $('Signal Detection').first().json;\n\nconst oi_data = oiResult.oi_data;\nconst liq_data = liqResult;\nconst signals = signalsResult;\n\nconst now = new Date();\nconst fecha = now.toLocaleDateString('es-ES');\nconst hora = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });\n\n// Format OI section\nlet oiSection = `OPEN INTEREST:\\n`;\noi_data.slice(0, 5).forEach(coin => {\n  const change = coin.oi_change_1h_pct >= 0 ? `+${coin.oi_change_1h_pct.toFixed(2)}` : coin.oi_change_1h_pct.toFixed(2);\n  const oiFormatted = coin.total_oi_usd >= 1e9 \n    ? `$${(coin.total_oi_usd/1e9).toFixed(1)}B` \n    : `$${(coin.total_oi_usd/1e6).toFixed(1)}M`;\n  \n  let regimeNote = '';\n  if (coin.regime === 'OI_RISING_PRICE') regimeNote = ' → OI subiendo + precio subiendo = tendencia sana';\n  else if (coin.regime === 'OI_FALLING_PRICE') regimeNote = ' → OI subiendo + precio bajando = capitulación';\n  else if (coin.regime === 'SHORT_SQUEEZE') regimeNote = ' → OI bajando + precio subiendo = short squeeze';\n  else if (coin.regime === 'DELVERAGING') regimeNote = ' → OI bajando + precio bajando = deleveraging';\n  \n  oiSection += `${coin.symbol} OI: ${oiFormatted} (${change}% 1h)${regimeNote}\\n`;\n});\n\n// Check for alerts\nconst btcAlert = signals.alerts.find(a => a.symbol === 'BTC');\nconst ethAlert = signals.alerts.find(a => a.symbol === 'ETH');\nif (btcAlert) {\n  oiSection += `⚠️ ALERTA BTC: ${btcAlert.message}\\n`;\n}\nif (ethAlert) {\n  oiSection += `⚠️ ALERTA ETH: ${ethAlert.message}\\n`;\n}\n\n// Format Liquidations section\nconst liq4h = liq_data.total_liquidation_4h_usd;\nconst liq4hFormatted = liq4h >= 1e9 \n  ? `$${(liq4h/1e9).toFixed(2)}B` \n  : `$${(liq4h/1e6).toFixed(1)}M`;\n\nlet liqSection = `\\nLIQUIDACIONES ÚLTIMAS 4H:\\n`;\nliqSection += `Total: ${liq4hFormatted}\\n`;\nliqSection += `Longs: $${(liq_data.long_liquidations_4h/1e6).toFixed(1)}M | Shorts: $${(liq_data.short_liquidations_4h/1e6).toFixed(1)}M\\n`;\n\n// Format Signals section\nlet signalsSection = `\\nSEÑALES:\\n`;\nsignals.oi_signals.forEach(s => {\n  signalsSection += `- ${s}\\n`;\n});\nsignals.liquidation_signals.forEach(s => {\n  signalsSection += `- ${s}\\n`;\n});\nsignalsSection += `\\nREGIMEN ACTUAL: ${signals.regime}\\n`;\n\nconst summary = `OI & LIQUIDACIONES — ${fecha} ${hora}\\n\\n${oiSection}${liqSection}${signalsSection}`;\n\nreturn [{ json: { summary, oi_data, liq_data, signals } }];"
+      },
+      "id": "node-format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 200],
+      "notes": "Format final summary for display and storage"
+    },
+    {
+      "parameters": {
+        "filePath": "/data/cache/crypto_oi_latest.json",
+        "options": {}
+      },
+      "id": "node-store-oi-latest",
+      "name": "Store OI Latest",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1.1,
+      "position": [1200, 100],
+      "notes": "Store latest OI data snapshot"
+    },
+    {
+      "parameters": {
+        "filePath": "/data/cache/crypto_liquidations.json",
+        "options": {}
+      },
+      "id": "node-store-liquidations",
+      "name": "Store Liquidations",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1.1,
+      "position": [1200, 200],
+      "notes": "Store latest liquidations data"
+    },
+    {
+      "parameters": {
+        "filePath": "/data/cache/crypto_oi_history.json",
+        "options": {
+          "append": true
+        }
+      },
+      "id": "node-store-oi-history",
+      "name": "Store OI History",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1.1,
+      "position": [1200, 300],
+      "notes": "Append OI data to history (for trend analysis)"
+    },
+    {
+      "parameters": {
+        "path": "crypto-oi",
+        "requestMethod": "GET",
+        "options": {}
+      },
+      "id": "node-webhook-oi",
+      "name": "Webhook OI",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [100, 600],
+      "webhookId": "crypto_oi",
+      "notes": "GET /webhook/crypto-oi - Returns OI snapshot"
+    },
+    {
+      "parameters": {
+        "path": "crypto-liquidations",
+        "requestMethod": "GET",
+        "options": {}
+      },
+      "id": "node-webhook-liquidations",
+      "name": "Webhook Liquidations",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [300, 600],
+      "webhookId": "crypto_liquidations",
+      "notes": "GET /webhook/crypto-liquidations - Returns liquidations"
+    },
+    {
+      "parameters": {
+        "path": "crypto-volume",
+        "requestMethod": "GET",
+        "options": {}
+      },
+      "id": "node-webhook-volume",
+      "name": "Webhook Volume",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [500, 600],
+      "webhookId": "crypto_volume",
+      "notes": "GET /webhook/crypto-volume - Returns volume data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Respond to Webhook - OI Snapshot\nconst fs = require('fs');\n\nlet oiData = { error: 'No data available' };\ntry {\n  if (fs.existsSync('/data/cache/crypto_oi_latest.json')) {\n    const content = fs.readFileSync('/data/cache/crypto_oi_latest.json', 'utf8');\n    oiData = JSON.parse(content);\n  }\n} catch (e) {\n  oiData = { error: e.message };\n}\n\nreturn [{ json: { endpoint: 'oi', data: oiData, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "node-respond-oi",
+      "name": "Respond OI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 600],
+      "notes": "Load and respond with OI snapshot"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Respond to Webhook - Liquidations\nconst fs = require('fs');\n\nlet liqData = { error: 'No data available' };\ntry {\n  if (fs.existsSync('/data/cache/crypto_liquidations.json')) {\n    const content = fs.readFileSync('/data/cache/crypto_liquidations.json', 'utf8');\n    liqData = JSON.parse(content);\n  }\n} catch (e) {\n  liqData = { error: e.message };\n}\n\nreturn [{ json: { endpoint: 'liquidations', data: liqData, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "node-respond-liquidations",
+      "name": "Respond Liquidations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 600],
+      "notes": "Load and respond with liquidations snapshot"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Respond to Webhook - Volume\nconst fs = require('fs');\n\nlet volumeData = { error: 'No data available' };\ntry {\n  if (fs.existsSync('/data/cache/crypto_volume.json')) {\n    const content = fs.readFileSync('/data/cache/crypto_volume.json', 'utf8');\n    volumeData = JSON.parse(content);\n  }\n} catch (e) {\n  volumeData = { error: e.message };\n}\n\nreturn [{ json: { endpoint: 'volume', data: volumeData, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "node-respond-volume",
+      "name": "Respond Volume",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 600],
+      "notes": "Load and respond with volume snapshot"
+    }
+  ],
+  "connections": {
+    "Trigger Cron (15min)": {
+      "main": [
+        [
+          {
+            "node": "Fetch OI Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Liquidations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Volume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OI Data": {
+      "main": [
+        [
+          {
+            "node": "Normalize OI Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Liquidations": {
+      "main": [
+        [
+          {
+            "node": "Normalize Liquidations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize OI Data": {
+      "main": [
+        [
+          {
+            "node": "Signal Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Liquidations": {
+      "main": [
+        [
+          {
+            "node": "Signal Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signal Detection": {
+      "main": [
+        [
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary": {
+      "main": [
+        [
+          {
+            "node": "Store OI Latest",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Liquidations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store OI History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook OI": {
+      "main": [
+        [
+          {
+            "node": "Respond OI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Liquidations": {
+      "main": [
+        [
+          {
+            "node": "Respond Liquidations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Volume": {
+      "main": [
+        [
+          {
+            "node": "Respond Volume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsfromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["crypto", "trading", "open-interest", "liquidations", "loris-tools"],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "templateId": "crypto_oi_liquidations",
+    "version": "1.0"
+  }
+}

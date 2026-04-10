@@ -1,0 +1,234 @@
+{
+  "name": "Economic Calendar Daily",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cron",
+              "property": "monday",
+              "days": ["Monday"],
+              "hour": 6,
+              "minute": 0
+            },
+            {
+              "field": "cron",
+              "property": "tuesday",
+              "days": ["Tuesday"],
+              "hour": 6,
+              "minute": 0
+            },
+            {
+              "field": "cron",
+              "property": "wednesday",
+              "days": ["Wednesday"],
+              "hour": 6,
+              "minute": 0
+            },
+            {
+              "field": "cron",
+              "property": "thursday",
+              "days": ["Thursday"],
+              "hour": 6,
+              "minute": 0
+            },
+            {
+              "field": "cron",
+              "property": "friday",
+              "days": ["Friday"],
+              "hour": 6,
+              "minute": 0
+            }
+          ]
+        },
+        "timezone": "Europe/Madrid"
+      },
+      "id": "trigger-calendar",
+      "name": "Trigger: Daily 06:00 Madrid",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.1,
+      "position": [100, 300],
+      "notes": "Fires Monday-Friday at 06:00 Europe/Madrid to fetch economic calendar before trading session"
+    },
+    {
+      "parameters": {
+        "url": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+        "timeout": 15000,
+        "response": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "options": {
+          "errorWorkflow": "fetch-error-handler"
+        }
+      },
+      "id": "fetch-calendar",
+      "name": "Fetch: ForexFactory Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 300],
+      "notes": "Primary fetch from fallback JSON source (more reliable than scraping ForexFactory directly). nfs.faireconomy.media provides the same FF calendar data in JSON format."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Economic Calendar Daily - Filter & Format\n// Filters HIGH/MEDIUM impact events and key always-included events\n\nconst ALWAYS_INCLUDED = ['FOMC', 'NFP', 'CPI', 'PPI', 'GDP', 'PMI', 'ECB', 'BOE', 'BOJ'];\nconst INCLUDE_KEYWORDS = ALWAYS_INCLUDED.map(k => k.toLowerCase());\n\nconst today = new Date();\nconst dateStr = today.toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\n\n// Get timezone offset for Madrid (Europe/Madrid)\nconst madridOffset = 2; // CEST offset (may vary by season)\nconst events = $input.all();\n\nif (!events || events.length === 0) {\n  return [{ json: { output: `CALENDARIO ECONÓMICO — ${dateStr}\\n\\nNo hay eventos económicos disponibles hoy.`, riskWindows: [] }}];\n}\n\nlet calendarData;\ntry {\n  calendarData = Array.isArray(events[0].json) ? events[0].json : [events[0].json];\n} catch (e) {\n  return [{ json: { output: `CALENDARIO ECONÓMICO — ${dateStr}\\n\\nError al procesar datos del calendario.`, riskWindows: [] }}];\n}\n\n// Filter for today\nconst todayStr = today.toISOString().split('T')[0];\nconst todayEvents = calendarData.filter(event => {\n  if (!event.date) return false;\n  const eventDate = event.date.split('T')[0];\n  return eventDate === todayStr;\n});\n\nif (todayEvents.length === 0) {\n  return [{ json: { output: `CALENDARIO ECONÓMICO — ${dateStr}\\n\\nNo hay eventos económicos programados para hoy.`, riskWindows: [] }}];\n}\n\n// Separate high and medium impact\nevents.forEach(e => console.log(JSON.stringify(e)));\n\nconst highImpact = todayEvents.filter(event => {\n  const impact = (event.impact || '').toUpperCase();\n  if (impact === 'HIGH') return true;\n  // Always include key events regardless of impact\n  const title = (event.title || event.event || '').toUpperCase();\n  return INCLUDE_KEYWORDS.some(k => title.includes(k));\n});\n\nconst mediumImpact = todayEvents.filter(event => {\n  const impact = (event.impact || '').toUpperCase();\n  const title = (event.title || event.event || '').toUpperCase();\n  const isAlwaysIncluded = INCLUDE_KEYWORDS.some(k => title.includes(k));\n  return impact === 'MEDIUM' && !isAlwaysIncluded;\n});\n\n// Extract risk windows (group by hour)\nconst riskWindows = [];\nconst hourMap = {};\n\n[...highImpact, ...mediumImpact].forEach(event => {\n  if (!event.date) return;\n  const hour = new Date(event.date).getUTCHours();\n  const key = hour;\n  if (!hourMap[key]) {\n    hourMap[key] = true;\n    const windowStart = new Date(event.date);\n    windowStart.setUTCMinutes(0, 0, 0);\n    const windowEnd = new Date(windowStart);\n    windowEnd.setUTCHours(hour + 1);\n    riskWindows.push(`${String(hour + madridOffset).padStart(2, '0')}:00-${String(hour + madridOffset + 1).padStart(2, '0')}:00 CET`);\n  }\n});\n\n\n// Format high impact\nlet highSection = 'ALTO IMPACTO:';\nif (highImpact.length === 0) {\n  highSection += '\\n  (ninguno)';\n} else {\n  highImpact.forEach(event => {\n    const hora = new Date(event.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });\n    const moneda = event.currency || 'N/A';\n    const nombre = event.title || event.event || 'Evento desconocido';\n    const previo = event.previous !== undefined && event.previous !== null ? event.previous : 'N/A';\n    const estimado = event.forecast !== undefined && event.forecast !== null ? event.forecast : 'N/A';\n    highSection += `\\n• ${hora} | ${moneda} | ${nombre} | Previo: ${previo} | Estimado: ${estimado}`;\n  });\n}\n\n// Format medium impact\nlet mediumSection = 'MEDIO IMPACTO:';\nif (mediumImpact.length === 0) {\n  mediumSection += '\\n  (ninguno)';\n} else {\n  mediumImpact.forEach(event => {\n    const hora = new Date(event.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });\n    const moneda = event.currency || 'N/A';\n    const nombre = event.title || event.event || 'Evento desconocido';\n    mediumSection += `\\n• ${hora} | ${moneda} | ${nombre}`;\n  });\n}\n\n// Risk windows\nconst riskSection = 'VENTANAS DE RIESGO HOY: ' + (riskWindows.length > 0 ? riskWindows.join(', ') : 'Ninguna');\n\nconst output = `CALENDARIO ECONÓMICO — ${dateStr}\\n\\n${highSection}\\n\\n${mediumSection}\\n\\n${riskSection}`;\n\nreturn [{ json: { output, riskWindows } }];"
+      },
+      "id": "format-calendar",
+      "name": "Format: Filter & Style",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "notes": "Filters events to HIGH/MEDIUM impact only, plus always-included key events (FOMC, NFP, CPI, etc.). Formats output in Spanish trading format."
+    },
+    {
+      "parameters": {
+        "filePath": "/data/cache/calendar_today.txt",
+        "fileName": "/data/cache/calendar_today.txt",
+        "options": {
+          "append": false
+        }
+      },
+      "id": "save-calendar",
+      "name": "Save: To Cache File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1.2,
+      "position": [700, 300],
+      "notes": "Saves formatted calendar to cache file for persistence and webhook access"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "calendar-today",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-calendar",
+      "name": "Webhook: GET calendar-today",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "notes": "Exposes the cached calendar via GET /webhook/calendar-today for trading agent access"
+    },
+    {
+      "parameters": {
+        "url": "https://www.forexfactory.com/calendar.php",
+        "timeout": 15000,
+        "options": {
+          "errorWorkflow": "fetch-error-handler"
+        }
+      },
+      "id": "fetch-forexfactory",
+      "name": "Fetch: ForexFactory (Primary)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 500],
+      "notes": "Fallback: Direct ForexFactory scrape. This may fail due to bot detection, hence the nfs.faireconomy.media JSON as primary."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error Handler - Return empty calendar on failure\nconst errorMessage = $input.first().json.message || $input.first().json.error || 'Unknown error';\nconsole.error('Calendar fetch failed:', errorMessage);\n\nconst today = new Date();\nconst dateStr = today.toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\n\nreturn [{ json: { \n  output: `CALENDARIO ECONÓMICO — ${dateStr}\\n\\nError al obtener el calendario económico. Inténtelo de nuevo más tarde.`, \n  riskWindows: [],\n  error: errorMessage\n}}];"
+      },
+      "id": "fetch-error-handler",
+      "name": "Error Handler: Fetch Fail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500],
+      "notes": "If fetch fails, return user-friendly error message instead of breaking the workflow"
+    }
+  ],
+  "connections": {
+    "Trigger: Daily 06:00 Madrid": {
+      "main": [
+        [
+          {
+            "node": "Fetch: ForexFactory Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch: ForexFactory Calendar": {
+      "main": [
+        [
+          {
+            "node": "Format: Filter & Style",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Fetch: ForexFactory (Primary)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch: ForexFactory (Primary)": {
+      "main": [
+        [
+          {
+            "node": "Format: Filter & Style",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Error Handler: Fetch Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format: Filter & Style": {
+      "main": [
+        [
+          {
+            "node": "Save: To Cache File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save: To Cache File": {
+      "main": [
+        [
+          {
+            "node": "Webhook: GET calendar-today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler: Fetch Fail": {
+      "main": [
+        [
+          {
+            "node": "Save: To Cache File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "economic_calendar_daily",
+  "tags": ["trading", "economic-calendar", "daily"]
+}

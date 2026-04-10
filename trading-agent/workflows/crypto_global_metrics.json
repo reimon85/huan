@@ -1,0 +1,272 @@
+{
+  "name": "Crypto Global Metrics",
+  "nodes": [
+    {
+      "id": "trigger-cron",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "notes": "HOURLY: Runs every hour 24/7 to fetch crypto global metrics from CoinGecko"
+    },
+    {
+      "id": "fetch-global",
+      "name": "Get Global Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.coingecko.com/api/v3/global",
+        "timeout": 15000,
+        "options": {}
+      },
+      "notes": "FAST: Fetches global crypto market data (market cap, volume, dominance)"
+    },
+    {
+      "id": "fetch-prices",
+      "name": "Get Top Prices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 400],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true",
+        "timeout": 15000,
+        "options": {}
+      },
+      "notes": "FAST: Fetches BTC, ETH, SOL prices and 24h change"
+    },
+    {
+      "id": "normalize-data",
+      "name": "Normalize Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "// Normalize CoinGecko data into standard schema\nconst globalData = $('Get Global Data').first().json;\nconst pricesData = $('Get Top Prices').first().json;\n\nconst global = globalData.data || globalData;\nconst btcDominance = global.market_cap_percentage?.btc || global.btc_dominance || 0;\nconst ethDominance = global.market_cap_percentage?.eth || global.eth_dominance || 0;\nconst altcoinDominance = 100 - btcDominance - ethDominance;\n\nconst totalMarketCap = global.total_market_cap?.usd || global.total_market_cap_usd || 0;\nconst totalVolume = global.total_volume?.usd || global.total_24h_volume_usd || 0;\nconst marketCapChange = global.market_cap_change_percentage_24h_usd || 0;\nconst activeCryptos = global.active_cryptocurrencies || global.active_cryptos || 0;\n\nconst volToMcapRatio = totalMarketCap > 0 ? totalVolume / totalMarketCap : 0;\n\n// Regime detection\nlet regime = 'RISK_OFF';\nif (marketCapChange < -3) {\n  regime = 'RISK_OFF';\n} else if (btcDominance > 55) {\n  regime = 'BTC_SEASON';\n} else if (ethDominance > 20 && marketCapChange > 0) {\n  regime = 'ETH_SEASON';\n} else if (btcDominance < 45) {\n  regime = 'ALT_SEASON';\n} else {\n  regime = 'NEUTRAL';\n}\n\n// BTC dominance trend (simplified - would need historical for real signal)\nconst btcPrice = pricesData.bitcoin?.usd || 0;\nconst btcChange = pricesData.bitcoin?.usd_24h_change || 0;\nconst ethPrice = pricesData.ethereum?.usd || 0;\nconst ethChange = pricesData.ethereum?.usd_24h_change || 0;\nconst solPrice = pricesData.solana?.usd || 0;\nconst solChange = pricesData.solana?.usd_24h_change || 0;\n\nconst normalized = {\n  timestamp: new Date().toISOString(),\n  total_market_cap_usd: totalMarketCap,\n  total_volume_24h_usd: totalVolume,\n  btc_dominance: parseFloat(btcDominance.toFixed(2)),\n  eth_dominance: parseFloat(ethDominance.toFixed(2)),\n  altcoin_dominance: parseFloat(altcoinDominance.toFixed(2)),\n  market_cap_change_24h_pct: parseFloat(marketCapChange.toFixed(2)),\n  active_cryptos: activeCryptos,\n  vol_to_mcap_ratio: parseFloat(volToMcapRatio.toFixed(4)),\n  regime: regime,\n  btc_price: { usd: btcPrice, change_24h: parseFloat(btcChange.toFixed(2)) },\n  eth_price: { usd: ethPrice, change_24h: parseFloat(ethChange.toFixed(2)) },\n  sol_price: { usd: solPrice, change_24h: parseFloat(solChange.toFixed(2)) }\n};\n\nreturn { json: normalized };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Normalizes CoinGecko data into standard output schema with regime detection"
+    },
+    {
+      "id": "detect-signals",
+      "name": "Signal Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "parameters": {
+        "jsCode": "// Signal detection based on metrics\nconst data = $('Normalize Metrics').first().json;\n\nconst signals = [];\nconst warnings = [];\n\n// High volatility signal\nif (data.vol_to_mcap_ratio > 0.15) {\n  signals.push('HIGH_VOLATILITY: Vol/MCap ratio above 0.15 indicates elevated market activity');\n}\n\n// BTC dominance changes suggest rotation\nif (data.btc_dominance > 55) {\n  signals.push('BTC_DOMINANCE_HIGH: BTC season signal - capital flowing to BTC');\n} else if (data.btc_dominance < 45) {\n  signals.push('BTC_DOMINANCE_LOW: Alt season potential - capital rotating to altcoins');\n}\n\n// Market cap decline warning\nif (data.market_cap_change_24h_pct < -3) {\n  warnings.push('RISK_OFF: Market cap down >3% in 24h - defensive positioning');\n} else if (data.market_cap_change_24h_pct > 3) {\n  signals.push('BULLISH: Market cap up >3% in 24h - risk-on environment');\n}\n\n// ETH performance relative to BTC\nif (data.eth_price.change_24h > data.btc_price.change_24h + 2) {\n  signals.push('ETH_OUTPERFORMANCE: ETH gaining against BTC - rotation to ETH');\n}\n\n// Build regime description\nlet regimeDescription = '';\nswitch (data.regime) {\n  case 'BTC_SEASON':\n    regimeDescription = 'BTC dominance elevated - capital concentrated in Bitcoin';\n    break;\n  case 'ETH_SEASON':\n    regimeDescription = 'ETH strength + positive momentum - rotation to Ethereum';\n    break;\n  case 'ALT_SEASON':\n    regimeDescription = 'Low BTC dominance - capital flowing to altcoins';\n    break;\n  case 'RISK_OFF':\n    regimeDescription = 'Market stress detected - risk-off positioning';\n    break;\n  default:\n    regimeDescription = 'No clear trend - sideways market awaiting catalyst';\n}\n\nconst output = {\n  ...data,\n  signals: signals,\n  warnings: warnings,\n  regime_description: regimeDescription\n};\n\nreturn { json: output };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Analyzes metrics for trading signals and regime description"
+    },
+    {
+      "id": "format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "parameters": {
+        "jsCode": "// Format human-readable summary\nconst data = $('Signal Detection').first().json;\n\nconst date = new Date(data.timestamp);\nconst dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });\nconst timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });\n\nconst formatCurrency = (val) => {\n  if (val >= 1e12) return '$' + (val / 1e12).toFixed(2) + 'T';\n  if (val >= 1e9) return '$' + (val / 1e9).toFixed(2) + 'B';\n  if (val >= 1e6) return '$' + (val / 1e6).toFixed(2) + 'M';\n  return '$' + val.toFixed(2);\n};\n\nconst changeSign = data.market_cap_change_24h_pct >= 0 ? '+' : '';\n\nconst summary = `CRYPTO GLOBAL — ${dateStr} ${timeStr}\n\nMarket Cap Total: ${formatCurrency(data.total_market_cap_usd)} (${changeSign}${data.market_cap_change_24h_pct}% 24h)\nVolumen 24h: ${formatCurrency(data.total_volume_24h_usd)} | Ratio Vol/MCap: ${data.vol_to_mcap_ratio}\n\nDOMINANCE:\nBTC: ${data.btc_dominance}% | ETH: ${data.eth_dominance}% | Alts: ${data.altcoin_dominance}%\n\nRégimen actual: ${data.regime} — ${data.regime_description}\n\nSEÑAL: ${data.signals.length > 0 ? data.signals.join(' | ') : 'Sin señales claras'}\n${data.warnings.length > 0 ? '⚠️ ' + data.warnings.join(' | ') : ''}`;\n\nconst output = {\n  ...data,\n  summary: summary\n};\n\nreturn { json: output };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Formats human-readable summary in Spanish for briefing"
+    },
+    {
+      "id": "store-json",
+      "name": "Store JSON Cache",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1350, 200],
+      "parameters": {
+        "fileName": "/data/cache/crypto_global_latest.json",
+        "data": "={{JSON.stringify($('Format Summary').first().json, null, 2)}}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Persists latest metrics as JSON for other workflows"
+    },
+    {
+      "id": "store-txt",
+      "name": "Store Text Summary",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1350, 400],
+      "parameters": {
+        "fileName": "/data/cache/crypto_global_latest.txt",
+        "data": "={{$('Format Summary').first().json.summary}}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Persists human-readable summary as text file"
+    },
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 700],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "crypto-global",
+        "responseMode": "lastNode",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "notes": "FAST: On-demand webhook to retrieve current crypto global metrics"
+    },
+    {
+      "id": "read-cache",
+      "name": "Read Cache",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [300, 700],
+      "parameters": {
+        "filePath": "/data/cache/crypto_global_latest.json",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Reads latest cached metrics for webhook response"
+    },
+    {
+      "id": "parse-cache",
+      "name": "Parse Cache JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [550, 700],
+      "parameters": {
+        "jsCode": "// Parse cached JSON for webhook response\nconst cacheData = $('Read Cache').first().json;\n\n// Handle both binary and JSON input\nlet parsed;\nif (typeof cacheData === 'string') {\n  try {\n    parsed = JSON.parse(cacheData);\n  } catch (e) {\n    parsed = { error: 'Invalid cache data', raw: cacheData };\n  }\n} else {\n  parsed = cacheData;\n}\n\nreturn { json: parsed };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Parses cached JSON data for webhook response"
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Global Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Top Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Global Data": {
+      "main": [
+        [
+          {
+            "node": "Normalize Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Top Prices": {
+      "main": [
+        [
+          {
+            "node": "Normalize Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Metrics": {
+      "main": [
+        [
+          {
+            "node": "Signal Detection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signal Detection": {
+      "main": [
+        [
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary": {
+      "main": [
+        [
+          {
+            "node": "Store JSON Cache",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Text Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Cache": {
+      "main": [
+        [
+          {
+            "node": "Parse Cache JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "Europe/Madrid",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": ["crypto", "global-metrics", "coingecko", "hourly", "trading-agent"],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "templateId": null,
+    "version": "1.0"
+  }
+}

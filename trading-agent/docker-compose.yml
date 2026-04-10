@@ -1,0 +1,72 @@
+# =============================================================================
+# Trading Agent n8n Infrastructure
+# =============================================================================
+# Docker Compose configuration for n8n self-hosted workflow automation
+# Version: 1.0.0
+# =============================================================================
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: trading-agent-n8n
+    restart: always
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # Authentication
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+
+      # Locale & Timezone
+      - N8N_TIMEZONE=${N8N_TIMEZONE:-Europe/Madrid}
+
+      # Protocol Configuration
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=${N8N_PORT:-5678}
+
+      # Webhook Configuration
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+
+      # LLM Configuration (passed to workflows)
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+
+      # Execution Settings
+      - N8N_EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - N8N_EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - N8N_EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      - N8N_DIAGNOSTICS_ENABLED=false
+
+      # Additional Settings
+      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL:-info}
+      - N8N_METRICS_ENABLED=false
+
+    volumes:
+      # Persist n8n configuration and credentials
+      - ./n8n_data:/home/node/.n8n
+
+      # Persist workflows
+      - ./workflows:/home/node/workflows
+
+      # Application data (wiki, sessions, cache)
+      - ./data/wiki:/home/node/data/wiki
+      - ./data/sessions:/home/node/data/sessions
+      - ./data/cache:/home/node/data/cache
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    networks:
+      - trading-agent-network
+
+networks:
+  trading-agent-network:
+    driver: bridge

@@ -1,0 +1,303 @@
+{
+  "name": "Critical Event Alert",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "news-alert",
+        "responseMode": "lastNode",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "notes": "FAST: Primary trigger - receives news alerts from Module 3. Low latency critical."
+    },
+    {
+      "id": "enrich-sentiment",
+      "name": "Get Sentiment Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [400, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.WEBHOOK_URL}}/webhook/sentiment",
+        "timeout": 10000,
+        "options": {}
+      },
+      "notes": "FAST: Parallel enrichment - sentiment data for context"
+    },
+    {
+      "id": "enrich-calendar",
+      "name": "Get Calendar Today",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [400, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.WEBHOOK_URL}}/webhook/calendar-today",
+        "timeout": 10000,
+        "options": {}
+      },
+      "notes": "FAST: Parallel enrichment - today's macro calendar"
+    },
+    {
+      "id": "read-cot",
+      "name": "Read COT Data",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [400, 500],
+      "parameters": {
+        "filePath": "/data/cache/cot_latest.json",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Parallel enrichment - COT positioning data from cache"
+    },
+    {
+      "id": "build-prompt",
+      "name": "Build Critical Analysis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300],
+      "parameters": {
+        "jsCode": "// Build critical analysis prompt with enriched context\nconst newsData = $input.first().json;\nconst sentimentData = $('Get Sentiment Data').first().json;\nconst calendarData = $('Get Calendar Today').first().json;\nconst cotData = $('Read COT Data').first().json;\n\nconst timestamp = new Date().toISOString();\nconst tituloNoticia = newsData.titulo || newsData.title || 'Evento crítico detectado';\nconst fuente = newsData.fuente || newsData.source || 'Desconocida';\nconst url = newsData.url || newsData.link || '';\nconst activosAfectados = newsData.activos_afectados || newsData.affected_assets || 'General';\n\nconst sentimentScore = sentimentData?.score || sentimentData?.sentiment_score || 'N/A';\nconst classification = sentimentData?.classification || sentimentData?.label || 'Neutral';\n\nconst cotInfo = cotData ? JSON.stringify(cotData, null, 2) : 'COT data no disponible';\nconst calendarInfo = calendarData ? JSON.stringify(calendarData, null, 2) : 'Sin eventos macro hoy';\n\nconst prompt = `ALERTA CRÍTICA — ${timestamp}\n\nEVENTO: ${tituloNoticia}\nFUENTE: ${fuente} | URL: ${url}\nACTIVOS POTENCIALMENTE AFECTADOS: ${activosAfectados}\n\nCONTEXTO ACTUAL:\n- Sentiment: ${sentimentScore} (${classification})\n- COT posicionamiento: ${cotInfo}\n- Eventos macro hoy: ${calendarInfo}\n\nAnaliza el impacto probable. Máximo 300 palabras. Estructura:\n1. QUÉ SIGNIFICA ESTE EVENTO (contexto y precedentes)\n2. IMPACTO INMEDIATO PROBABLE por activo afectado\n3. SI HAY GAP DE APERTURA: probabilidad de cierre y por qué\n4. QUÉ VIGILAR en las próximas 2 horas\n5. ACCIÓN RECOMENDADA: qué hacer y qué evitar ahora mismo`;\n\nreturn { json: { prompt, newsData, sentimentData, cotData, calendarData, timestamp } };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Combines all enrichment data into structured prompt for LLM"
+    },
+    {
+      "id": "llm-analysis",
+      "name": "LLM Critical Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [950, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.LLM_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.LLM_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{$env.LLM_MODEL || 'claude-3-haiku-20240307'}}"
+            },
+            {
+              "name": "max_tokens",
+              "value": 600
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"{{ $json.prompt }}\"}]"
+            }
+          ]
+        },
+        "timeout": 55000,
+        "options": {}
+      },
+      "notes": "FAST: LLM call optimized for speed - max_tokens 600, 55s timeout. Extracts critical analysis."
+    },
+    {
+      "id": "format-alert",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300],
+      "parameters": {
+        "jsCode": "// Format alert with urgency indicator\nconst llmResponse = $input.first().json;\nconst promptData = $('Build Critical Analysis Prompt').first().json;\n\nconst newsData = promptData.newsData;\nconst analysis = llmResponse.content || llmResponse.analysis || JSON.stringify(llmResponse);\n\n// Determine urgency based on keywords\nconst urgencyKeywords = ['guerra', 'crisis', 'colapso', 'default', 'emergencia', 'war', 'crisis', 'collapse'];\nconst textToCheck = (newsData.titulo || '') + ' ' + analysis;\nconst isCritical = urgencyKeywords.some(kw => textToCheck.toLowerCase().includes(kw));\n\nconst urgencyIndicator = isCritical ? '🔴 CRÍTICO' : '🟡 ATENCIÓN';\nconst timestamp = new Date().toISOString();\n\nconst formattedAlert = {\n  id: `alert_${Date.now()}`,\n  timestamp,\n  urgency: urgencyIndicator,\n  is_critical: isCritical,\n  news: {\n    title: newsData.titulo || newsData.title,\n    source: newsData.fuente || newsData.source,\n    url: newsData.url || newsData.link\n  },\n  analysis,\n  context: {\n    sentiment: promptData.sentimentData,\n    cot: promptData.cotData,\n    calendar: promptData.calendarData\n  }\n};\n\nreturn { json: formattedAlert };",
+        "outputs": ["main"]
+      },
+      "notes": "FAST: Formats LLM response with urgency indicator and timestamp"
+    },
+    {
+      "id": "notify-telegram",
+      "name": "Telegram Notification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1450, 200],
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "={{ $json.urgency }} \\n\\n📰 {{ $json.news.title }}\\n\\n📊 ANÁLISIS:\\n{{ $json.analysis }}\\n\\n🔗 {{ $json.news.url }}",
+        "additionalFields": {
+          "disable_notification": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "notes": "FAST: Immediate Telegram notification for mobile push"
+    },
+    {
+      "id": "save-alert",
+      "name": "Save to Alerts Cache",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1450, 400],
+      "parameters": {
+        "fileName": "/data/cache/alerts_today.json",
+        "data": "={{ JSON.stringify($('Format Alert').first().json) }}",
+        "options": {
+          "append": true,
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Appends alert to today's alerts cache file"
+    },
+    {
+      "id": "webhook-alerts-today",
+      "name": "Return Alerts Today",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1700, 300],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "alerts-today",
+        "responseMode": "responseNode",
+        "responseData": "={{ $json }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "notes": "FAST: Returns today's alert history via webhook"
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Sentiment Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Calendar Today",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read COT Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sentiment Data": {
+      "main": [
+        [
+          {
+            "node": "Build Critical Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Calendar Today": {
+      "main": [
+        [
+          {
+            "node": "Build Critical Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read COT Data": {
+      "main": [
+        [
+          {
+            "node": "Build Critical Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Critical Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "LLM Critical Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Critical Analysis": {
+      "main": [
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Telegram Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save to Alerts Cache",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Return Alerts Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeout": 60,
+    "maxTries": 1
+  },
+  "id": "critical_event_alert",
+  "meta": {
+    "templateCredsSetup": [],
+    "templateId": "critical_event_alert"
+  },
+  "versionId": "1",
+  "tags": [
+    {
+      "name": "critical"
+    },
+    {
+      "name": "fast-response"
+    },
+    {
+      "name": "alerts"
+    }
+  ]
+}

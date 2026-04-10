@@ -1,0 +1,504 @@
+{
+  "name": "News Monitor Real-time",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "node-cron-trigger",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "description": "Triggers every 15 minutes to fetch latest news from all RSS sources"
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.reuters.com/reuters/businessNews",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-reuters-business",
+      "name": "Reuters Business",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, -200],
+      "continueOnFail": true,
+      "description": "Reuters Business News RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.reuters.com/reuters/topNews",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-reuters-top",
+      "name": "Reuters Top News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, -50],
+      "continueOnFail": true,
+      "description": "Reuters Top News RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://www.forexlive.com/feed/news",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-forexlive",
+      "name": "ForexLive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 100],
+      "continueOnFail": true,
+      "description": "ForexLive News RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://www.dailyfx.com/feeds/market_news",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-dailyfx",
+      "name": "DailyFX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 250],
+      "continueOnFail": true,
+      "description": "DailyFX Market News RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://www.eia.gov/rss/news.xml",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-eia-energy",
+      "name": "EIA Energy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 400],
+      "continueOnFail": true,
+      "description": "EIA Energy News RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://oilprice.com/rss/main",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-oilprice",
+      "name": "OilPrice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 550],
+      "continueOnFail": true,
+      "description": "OilPrice RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://cointelegraph.com/rss",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-cointelegraph",
+      "name": "CoinTelegraph",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 700],
+      "continueOnFail": true,
+      "description": "CoinTelegraph RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://decrypt.co/feed",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-decrypt",
+      "name": "Decrypt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 850],
+      "continueOnFail": true,
+      "description": "Decrypt RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-bbc-world",
+      "name": "BBC World",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 1000],
+      "continueOnFail": true,
+      "description": "BBC World News RSS feed"
+    },
+    {
+      "parameters": {
+        "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "node-nytimes",
+      "name": "NYTimes World",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 1150],
+      "continueOnFail": true,
+      "description": "NYTimes World RSS feed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all RSS feeds into single array\nconst allItems = [];\n\n// Helper to safely extract items from various RSS formats\nconst extractItems = (response, source) => {\n  if (!response) return [];\n  \n  // Handle different RSS structures\n  let items = [];\n  \n  if (Array.isArray(response)) {\n    items = response;\n  } else if (response.items && Array.isArray(response.items)) {\n    items = response.items;\n  } else if (response.feed && response.feed.items) {\n    items = response.feed.items;\n  } else if (typeof response === 'object') {\n    // Try common RSS item paths\n    for (const key of Object.keys(response)) {\n      const val = response[key];\n      if (Array.isArray(val) && val.length > 0 && (val[0].title || val[0].link)) {\n        items = val;\n        break;\n      }\n    }\n  }\n  \n  return items.map(item => ({\n    ...item,\n    _source: source\n  }));\n};\n\n// Process each input\nconst inputs = $input.all();\nfor (const input of inputs) {\n  if (input.json && input.json.length !== undefined) {\n    // Array of items\n    allItems.push(...input.json.map(item => ({ ...item, _source: input.json._source || 'unknown' })));\n  } else if (input.json) {\n    allItems.push(...extractItems(input.json, input.json._source || 'unknown'));\n  }\n}\n\n// If no items from inputs, try to parse from first response\nif (allItems.length === 0 && inputs.length > 0) {\n  const firstData = inputs[0].json;\n  if (firstData && firstData.items) {\n    allItems.push(...firstData.items.map(item => ({ ...item, _source: 'merged' })));\n  }\n}\n\nreturn allItems.map(item => ({ json: item }));"
+      },
+      "id": "node-merge-feeds",
+      "name": "Merge Feeds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500],
+      "description": "Merges all RSS feed items into a single array"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter and classify news items\nconst twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);\n\nconst HIGH_PRIORITY_KEYWORDS = [\n  'Fed', 'FOMC', 'interest rate', 'inflation', 'CPI', 'NFP', 'unemployment',\n  'oil', 'crude', 'OPEC', 'Iran', 'Russia', 'Ukraine', 'China', 'Taiwan',\n  'sanctions', 'war', 'attack', 'missile', 'nuclear', 'Bitcoin', 'crypto',\n  'SEC', 'ETF', 'recession', 'GDP', 'PMI', 'ECB', 'BOE', 'BOJ',\n  'Dollar', 'DXY', 'EUR', 'JPY', 'gold', 'silver'\n];\n\nconst CRITICAL_GEOPOLITICAL = [\n  'war', 'attack', 'invasion', 'nuclear', 'sanctions', 'embargo', 'conflict',\n  'missile', 'explosion', 'coup'\n];\n\nconst CATEGORY_KEYWORDS = {\n  macro: ['Fed', 'FOMC', 'interest rate', 'inflation', 'CPI', 'NFP', 'unemployment', 'GDP', 'PMI', 'ECB', 'BOE', 'BOJ', 'recession', 'Dollar', 'DXY'],\n  geopolitica: ['war', 'attack', 'invasion', 'sanctions', 'embargo', 'conflict', 'coup', 'Russia', 'Ukraine', 'China', 'Taiwan', 'Iran', 'missile', 'explosion'],\n  energia: ['oil', 'crude', 'OPEC', 'EIA', 'energy', 'gas', 'petroleum', 'natural gas'],\n  crypto: ['Bitcoin', 'crypto', 'SEC', 'ETF', 'blockchain', 'coin', 'token', 'Bitcoin ETF'],\n  divisas: ['EUR', 'JPY', 'GBP', 'USD', 'forex', 'currency', 'exchange rate']\n};\n\nconst ASSET_KEYWORDS = {\n  CL: ['oil', 'crude', 'OPEC', 'petroleum'],\n  ES: ['S&P', 'equity', 'stock', 'SP500'],\n  NQ: ['Nasdaq', 'tech', 'stock'],\n  GC: ['gold', 'gold futures', 'XAU'],\n  SI: ['silver', 'XAG'],\n  NG: ['natural gas', 'energy'],\n  BTC: ['Bitcoin', 'crypto', 'BTC'],\n  ETH: ['Ethereum', 'ETH', 'crypto'],\n  XAUUSD: ['gold', 'XAU'],\n  XAGUSD: ['silver', 'XAG']\n};\n\nfunction matchesKeywords(text, keywords) {\n  if (!text) return false;\n  const lower = text.toLowerCase();\n  return keywords.some(kw => lower.includes(kw.toLowerCase()));\n}\n\nfunction getCategory(title, description) {\n  const text = `${title || ''} ${description || ''}`;\n  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {\n    if (matchesKeywords(text, keywords)) return cat;\n  }\n  return 'macro';\n}\n\nfunction getAffectedAssets(title, description) {\n  const text = `${title || ''} ${description || ''}`;\n  const assets = [];\n  for (const [asset, keywords] of Object.entries(ASSET_KEYWORDS)) {\n    if (matchesKeywords(text, keywords)) assets.push(asset);\n  }\n  return assets.length > 0 ? assets : ['GENERAL'];\n}\n\nfunction parseDate(item) {\n  const dateStr = item.pubDate || item.date || item.updated || item.published;\n  if (!dateStr) return new Date();\n  try {\n    return new Date(dateStr);\n  } catch {\n    return new Date();\n  }\n}\n\nfunction extractGuid(item) {\n  return item.guid || item.link || item.id || `${item.title}-${item.pubDate}`;\n}\n\nfunction truncate(text, maxLen) {\n  if (!text) return '';\n  const clean = text.replace(/<[^>]*>/g, '').trim();\n  return clean.length > maxLen ? clean.substring(0, maxLen) + '...' : clean;\n}\n\nconst items = $input.all();\nconst filteredItems = [];\n\nfor (const itemWrapper of items) {\n  const item = itemWrapper.json;\n  \n  try {\n    // Parse date\n    const pubDate = parseDate(item);\n    \n    // Skip if older than 2 hours\n    if (pubDate < twoHoursAgo) continue;\n    \n    // Combine title and description for keyword matching\n    const title = item.title || '';\n    const description = item.description || item.content || '';\n    const fullText = `${title} ${description}`;\n    \n    // Check for high priority keywords\n    const isHighPriority = matchesKeywords(fullText, HIGH_PRIORITY_KEYWORDS);\n    if (!isHighPriority) continue;\n    \n    // Check for critical geopolitical\n    const isCritical = matchesKeywords(fullText, CRITICAL_GEOPOLITICAL);\n    \n    // Build result object\n    const result = {\n      timestamp: pubDate.toISOString(),\n      titulo: title,\n      fuente: item._source || 'unknown',\n      url: item.link || item.url || '',\n      categoria: getCategory(title, description),\n      urgencia: isCritical ? 'alta' : (isHighPriority ? 'alta' : 'media'),\n      activos_afectados: getAffectedAssets(title, description),\n      resumen: truncate(description, 200),\n      guid: extractGuid(item),\n      is_critical_geopolitical: isCritical\n    };\n    \n    filteredItems.push(result);\n  } catch (error) {\n    // Skip malformed items\n    console.error('Error processing item:', error);\n  }\n}\n\n// Sort by timestamp descending\nfilteredItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));\n\nreturn filteredItems.map(item => ({ json: item }));"
+      },
+      "id": "node-filter-classify",
+      "name": "Filter & Classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 500],
+      "description": "Filters news from last 2 hours with priority keywords and classifies by category/urgency"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Deduplicate against news_seen.json\nconst fs = require('fs');\nconst path = require('path');\n\nconst seenFilePath = '/data/cache/news_seen.json';\nconst seenGuids = new Set();\n\n// Load existing seen GUIDs\ntry {\n  if (fs.existsSync(seenFilePath)) {\n    const data = fs.readFileSync(seenFilePath, 'utf8');\n    const seen = JSON.parse(data);\n    // Support both array and object formats\n    if (Array.isArray(seen)) {\n      seen.forEach(guid => seenGuids.add(guid));\n    } else if (seen.guids && Array.isArray(seen.guids)) {\n      seen.guids.forEach(guid => seenGuids.add(guid));\n    }\n  }\n} catch (error) {\n  console.error('Error reading seen file:', error.message);\n}\n\n// Filter out duplicates\nconst items = $input.all();\nconst deduplicated = [];\nconst newGuids = [];\n\nfor (const itemWrapper of items) {\n  const item = itemWrapper.json;\n  const guid = item.guid || item.url || `${item.titulo}-${item.timestamp}`;\n  \n  if (!seenGuids.has(guid)) {\n    deduplicated.push(item);\n    newGuids.push(guid);\n  }\n}\n\n// Update seen file with today's GUIDs\ntry {\n  const today = new Date().toISOString().split('T')[0];\n  const existingData = { date: today, guids: [] };\n  \n  if (fs.existsSync(seenFilePath)) {\n    const existing = JSON.parse(fs.readFileSync(seenFilePath, 'utf8'));\n    if (existing.date === today) {\n      existingData.guids = existing.guids || [];\n    }\n  }\n  \n  existingData.guids = [...existingData.guids, ...newGuids];\n  \n  // Ensure directory exists\n  const dir = path.dirname(seenFilePath);\n  if (!fs.existsSync(dir)) {\n    fs.mkdirSync(dir, { recursive: true });\n  }\n  \n  fs.writeFileSync(seenFilePath, JSON.stringify(existingData, null, 2));\n} catch (error) {\n  console.error('Error writing seen file:', error.message);\n}\n\nreturn deduplicated.map(item => ({ json: item }));"
+      },
+      "id": "node-deduplicate",
+      "name": "Deduplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 500],
+      "description": "Removes duplicate news items by comparing against previously seen GUIDs"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Store news_feed.json and prepare alerts\nconst fs = require('fs');\nconst path = require('path');\n\nconst feedFilePath = '/data/cache/news_feed.json';\nconst maxItems = 100;\n\nconst items = $input.all();\n\n// Read existing feed\nlet existingFeed = [];\ntry {\n  if (fs.existsSync(feedFilePath)) {\n    existingFeed = JSON.parse(fs.readFileSync(feedFilePath, 'utf8'));\n  }\n} catch (error) {\n  console.error('Error reading feed file:', error.message);\n}\n\n// Merge and rotate\nconst mergedFeed = [...items.map(i => i.json), ...existingFeed]\n  .slice(0, maxItems);\n\n// Ensure directory exists\nconst dir = path.dirname(feedFilePath);\nif (!fs.existsSync(dir)) {\n  fs.mkdirSync(dir, { recursive: true });\n}\n\n// Write updated feed\ntry {\n  fs.writeFileSync(feedFilePath, JSON.stringify(mergedFeed, null, 2));\n} catch (error) {\n  console.error('Error writing feed file:', error.message);\n}\n\n// Return items with alert flag for high urgency\nreturn items.map(item => ({\n  json: {\n    ...item.json,\n    send_alert: item.json.urgencia === 'alta' || item.json.is_critical_geopolitical\n  }\n}));"
+      },
+      "id": "node-store-feed",
+      "name": "Store Feed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400],
+      "description": "Stores news to news_feed.json (last 100 items, rotating old)"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/news-alert",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "node-alert-webhook",
+      "name": "Alert Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 500],
+      "continueOnFail": true,
+      "description": "Sends POST to webhook when high urgency news detected"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-send-alert",
+              "leftValue": "={{ $json.send_alert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-high-urgency",
+      "name": "If High Urgency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 600],
+      "description": "Branch flow only if news has high urgency flag"
+    },
+    {
+      "parameters": {
+        "path": "news-latest",
+        "responseMode": "lastNode",
+        "responseData": {
+          "mode": "defineKey",
+          "value": {
+            "news": "={{ $json }}",
+            "count": "={{ $json.length }}",
+            "timestamp": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-webhook-latest",
+      "name": "Webhook Latest",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [1500, 300],
+      "webhookId": "news-latest",
+      "description": "GET /webhook/news-latest - Returns last 20 classified news"
+    },
+    {
+      "parameters": {
+        "path": "news-urgent",
+        "responseMode": "lastNode",
+        "responseData": {
+          "mode": "defineKey",
+          "value": {
+            "news": "={{ $json }}",
+            "count": "={{ $json.length }}",
+            "timestamp": "={{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-webhook-urgent",
+      "name": "Webhook Urgent",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [1500, 700],
+      "webhookId": "news-urgent",
+      "description": "GET /webhook/news-urgent - Returns today's high urgency news"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Filter for GET /webhook/news-latest - last 20 news\nconst fs = require('fs');\n\nconst feedFilePath = '/data/cache/news_feed.json';\n\ntry {\n  if (fs.existsSync(feedFilePath)) {\n    const feed = JSON.parse(fs.readFileSync(feedFilePath, 'utf8'));\n    const latest = feed.slice(0, 20);\n    return latest.map(item => ({ json: item }));\n  }\n} catch (error) {\n  console.error('Error reading feed:', error.message);\n}\n\nreturn [{ json: { news: [], count: 0, error: 'No feed data available' } }];"
+      },
+      "id": "node-get-latest",
+      "name": "Get Latest 20",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 200],
+      "description": "Reads last 20 news from feed file for webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Filter for GET /webhook/news-urgent - today's high urgency\nconst fs = require('fs');\n\nconst feedFilePath = '/data/cache/news_feed.json';\nconst today = new Date().toISOString().split('T')[0];\n\ntry {\n  if (fs.existsSync(feedFilePath)) {\n    const feed = JSON.parse(fs.readFileSync(feedFilePath, 'utf8'));\n    const urgent = feed.filter(item => {\n      const itemDate = item.timestamp ? item.timestamp.split('T')[0] : '';\n      return itemDate === today && item.urgencia === 'alta';\n    });\n    return urgent.map(item => ({ json: item }));\n  }\n} catch (error) {\n  console.error('Error reading feed:', error.message);\n}\n\nreturn [{ json: { news: [], count: 0, error: 'No urgent news available' } }];"
+      },
+      "id": "node-get-urgent",
+      "name": "Get Urgent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 600],
+      "description": "Reads today's high urgency news from feed file for webhook"
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          { "node": "Reuters Business", "type": "main", "index": 0 },
+          { "node": "Reuters Top News", "type": "main", "index": 0 },
+          { "node": "ForexLive", "type": "main", "index": 0 },
+          { "node": "DailyFX", "type": "main", "index": 0 },
+          { "node": "EIA Energy", "type": "main", "index": 0 },
+          { "node": "OilPrice", "type": "main", "index": 0 },
+          { "node": "CoinTelegraph", "type": "main", "index": 0 },
+          { "node": "Decrypt", "type": "main", "index": 0 },
+          { "node": "BBC World", "type": "main", "index": 0 },
+          { "node": "NYTimes World", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Reuters Business": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "Reuters Top News": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "ForexLive": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "DailyFX": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "EIA Energy": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "OilPrice": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "CoinTelegraph": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "Decrypt": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "BBC World": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "NYTimes World": {
+      "main": [
+        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+      ]
+    },
+    "Merge Feeds": {
+      "main": [
+        [{ "node": "Filter & Classify", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter & Classify": {
+      "main": [
+        [{ "node": "Deduplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Deduplicate": {
+      "main": [
+        [{ "node": "Store Feed", "type": "main", "index": 0 }]
+      ]
+    },
+    "Store Feed": {
+      "main": [
+        [{ "node": "If High Urgency", "type": "main", "index": 0 }]
+      ]
+    },
+    "If High Urgency": {
+      "main": [
+        [{ "node": "Alert Webhook", "type": "main", "index": 0 }]
+      ]
+    },
+    "Alert Webhook": {
+      "main": [
+        [{ "node": "Webhook Latest", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Latest 20": {
+      "main": [
+        [{ "node": "Webhook Latest", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Urgent": {
+      "main": [
+        [{ "node": "Webhook Urgent", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "news_monitor_realtime",
+  "meta": {
+    "templateCredentiallessUnchecked": true
+  },
+  "tags": ["trading", "news", "monitor", "realtime", "rss"]
+}

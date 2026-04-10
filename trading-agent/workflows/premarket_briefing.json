@@ -1,0 +1,543 @@
+{
+  "name": "Pre-market Briefing Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cron",
+              "minutes": "30",
+              "hours": "6",
+              "dayOfWeek": "1-5"
+            }
+          ]
+        },
+        "triggerValue": "",
+        "options": {}
+      },
+      "id": "trigger-cron-premarket",
+      "name": "Trigger — 06:30 Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/calendar-today",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-calendar",
+      "name": "Fetch Economic Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 100]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/news-latest",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-news",
+      "name": "Fetch Latest News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 250]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/cot-latest",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-cot",
+      "name": "Fetch COT Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/sentiment",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-sentiment",
+      "name": "Fetch Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 550]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/wiki/trader_profile.md",
+        "options": {
+          "fileFormat": "markdown"
+        }
+      },
+      "id": "read-trader-profile",
+      "name": "Read Trader Profile",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1.1,
+      "position": [380, 700]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/sessions/last_session.md",
+        "options": {
+          "fileFormat": "markdown"
+        }
+      },
+      "id": "read-last-session",
+      "name": "Read Last Session",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1.1,
+      "position": [380, 850]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/prices",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-prices",
+      "name": "Fetch Prices Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 1000]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/prices-alerts",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-prices-alerts",
+      "name": "Fetch Prices Alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 1150]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/webhook/crypto-snapshot",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-crypto",
+      "name": "Fetch Crypto Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [380, 1300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all context data into a single context string\nconst today = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\n\nconst calendarData = $input.item(0).json;\nconst newsData = $input.item(1).json;\nconst cotData = $input.item(2).json;\nconst sentimentData = $input.item(3).json;\nconst traderProfile = $input.item(4).json;\nconst lastSession = $input.item(5).json;\nconst pricesSnapshot = $input.item(6).json;\nconst pricesAlerts = $input.item(7).json;\nconst cryptoSnapshot = $input.item(8).json;\n\nconst calendarStr = calendarData ? JSON.stringify(calendarData, null, 2) : 'No hay datos económicos disponibles.';\nconst newsStr = newsData ? JSON.stringify(newsData, null, 2) : 'No hay noticias disponibles.';\nconst cotStr = cotData ? JSON.stringify(cotData, null, 2) : 'No hay datos COT disponibles.';\nconst sentimentStr = sentimentData ? JSON.stringify(sentimentData, null, 2) : 'No hay datos de sentiment disponibles.';\nconst profileStr = traderProfile && traderProfile.data ? traderProfile.data : 'Perfil del trader no disponible.';\nconst sessionStr = lastSession && lastSession.data ? lastSession.data : 'No hay datos de sesión anterior.';\nconst pricesStr = pricesSnapshot ? JSON.stringify(pricesSnapshot, null, 2) : 'No hay datos de precios disponibles.';\nconst alertsStr = pricesAlerts ? JSON.stringify(pricesAlerts, null, 2) : 'No hay alertas de precio activas.';\nconst cryptoStr = cryptoSnapshot ? JSON.stringify(cryptoSnapshot, null, 2) : 'No hay datos de crypto disponibles.';\n\nconst contextString = `=== CONTEXTO DE MERCADO — ${today} ===\n\n## CALENDARIO ECONÓMICO\n${calendarStr}\n\n## ÚLTIMAS 12H NOTICIAS\n${newsStr}\n\n## RESUMEN COT\n${cotStr}\n\n## SNAPSHOT SENTIMENT\n${sentimentStr}\n\n=== PERFIL DEL TRADER ===\n${profileStr}\n\n=== ÚLTIMA SESIÓN ===\n${sessionStr}\n\n=== PRECIOS DE MERCADO (15min delay) ===\n${pricesStr}\n\nALERTAS DE PRECIO ACTIVAS:\n${alertsStr}\n\n=== MERCADO CRYPTO ===\n${cryptoStr}`;\nreturn { json: { context: contextString, date: today } };"
+      },
+      "id": "merge-context",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $env.LLM_MODEL || 'claude-3-5-sonnet-20241022' }}"
+            },
+            {
+              "name": "max_tokens",
+              "value": 2000
+            },
+            {
+              "name": "system",
+              "value": "Eres el Maestro Trader, un asistente de IA especializado en análisis de mercados financieros y trading discrecional.\n\nTu función es generar briefings pre-mercado completos y accionables para traders personales.\n\nREGLAS FUNDAMENTALES:\n1. Sé conciso pero completo — cada sección debe tener información útil\n2. Usa datos concretos: niveles de precio, tiempos, porcentajes\n3. Prioriza por impacto en los mercados que opera el usuario (Forex, Futuros ES/NQ/CL/GC, Crypto, Commodities)\n4. Cuando haya incertidumbre, presenta escenarios múltiples\n5. NUNCA des consejos de inversión, solo información y análisis\n6. Siempre incluye disclaimer de que es información educativa\n\nFORMATO DEL BRIEFING:\n\n# BRIEFING PRE-MERCADO — {fecha}\n## 1. RESUMEN MACRO\n- 3-5 puntos sobre qué está moviendo los mercados hoy\n- Contextualiza con datos macro relevantes\n\n## 2. EVENTOS CLAVE DEL DÍA\n- Lista cronológica con hora (Europe/Madrid)\n- Impacto esperado en cada mercado\n- Qué vigilar en cada evento\n\n## 3. LECTURAS DE SENTIMENT\n- Posicionamiento neto de players mayoristas\n- Indicadores de sentiment relevantes\n- Qué dice el posicionamiento sobre directional bias\n\n## 4. MERCADOS A VIGILAR\n- Para cada mercado relevante hoy:\n  - Rango esperado / niveles clave\n  - Sesgo direccional\n  - Catalizadores\n  - Incluye análisis específico de crypto si el régimen crypto es relevante para el contexto macro del día (correlación con risk appetite, DXY, etc.)\n\n## 5. SESGOS Y RIESGOS\n- Narrativas dominantes\n- Riesgos potenciales\n- Qué podría sorprender al mercado\n\n## 6. CHECKLIST PRE-SESIÓN\n- 3-5 puntos de atención para hoy\n- Acciones concretas antes de la apertura\n\n---\n*Este briefing es información educativa, no consejo de inversión. Trading involves substantial risk of loss.*"
+            },
+            {
+              "name": "messages",
+              "value": "[{\"role\": \"user\", \"content\": \"Genera el briefing de pre-mercado para hoy basándote en este contexto:\\n\\n{{ $json.context }}\"}]"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "llm-call",
+      "name": "LLM — Generate Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response and format with header/footer\nconst llmResponse = $input.first().json;\nconst today = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\nconst now = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });\n\nlet responseText = '';\n\nif (llmResponse.content && Array.isArray(llmResponse.content)) {\n  responseText = llmResponse.content[0].text;\n} else if (llmResponse.text) {\n  responseText = llmResponse.text;\n} else if (typeof llmResponse === 'string') {\n  responseText = llmResponse;\n} else {\n  responseText = JSON.stringify(llmResponse, null, 2);\n}\n\nconst disclaimer = `---\n*Generado: ${today} ${now} | Este briefing es información educativa, no consejo de inversión. Trading involves substantial risk of loss.*\n`;\n\nconst formattedBriefing = `# BRIEFING PRE-MERCADO — ${today}\\n\\n${responseText}\\n\\n${disclaimer}`;\n\n\nreturn {\n  json: {\n    briefing: formattedBriefing,\n    raw_response: responseText,\n    date: today,\n    generated_at: now\n  }\n};"
+      },
+      "id": "parse-response",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 400]
+    },
+    {
+      "parameters": {
+        "filePath": "=/data/sessions/briefing_{{ $json.date }}.md",
+        "data": "={{ $json.briefing }}",
+        "options": {
+          "fileFormat": "markdown"
+        }
+      },
+      "id": "store-briefing-session",
+      "name": "Store Briefing (Session)",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1.1,
+      "position": [1500, 250]
+    },
+    {
+      "parameters": {
+        "filePath": "=/data/cache/briefing_today.txt",
+        "data": "={{ $json.briefing }}",
+        "options": {
+          "fileFormat": "text"
+        }
+      },
+      "id": "store-briefing-cache",
+      "name": "Store Briefing (Cache)",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1.1,
+      "position": [1500, 450]
+    },
+    {
+      "parameters": {
+        "path": "briefing-today",
+        "options": {}
+      },
+      "id": "webhook-briefing",
+      "name": "Webhook — Briefing Today",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [1500, 650],
+      "webhookId": "briefing-today"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TELEGRAM_BOT_URL }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $env.TELEGRAM_CHAT_ID }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.briefing }}"
+            },
+            {
+              "name": "parse_mode",
+              "value": "Markdown"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-telegram",
+      "name": "Notify Telegram (Optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 850]
+    }
+  ],
+  "connections": {
+    "Trigger — 06:30 Cron": {
+      "main": [
+        [
+          {
+            "node": "Fetch Economic Calendar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Latest News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch COT Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Sentiment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Trader Profile",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Last Session",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Prices Snapshot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Prices Alerts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Crypto Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Economic Calendar": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Latest News": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch COT Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Trader Profile": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Last Session": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Prices Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Prices Alerts": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Crypto Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context": {
+      "main": [
+        [
+          {
+            "node": "LLM — Generate Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM — Generate Briefing": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Store Briefing (Session)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Briefing (Cache)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook — Briefing Today",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Telegram (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "templateId": "premarket-briefing-orchestrator"
+  },
+  "tags": [
+    "premarket",
+    "daily",
+    "orchestrator",
+    "maestro"
+  ]
+}

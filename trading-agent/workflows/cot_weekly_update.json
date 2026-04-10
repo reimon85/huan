@@ -1,0 +1,305 @@
+{
+  "name": "COT Weekly Update",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 22,
+              "triggerAtMinute": 30,
+              "weekday": "Friday"
+            }
+          ],
+          "timezone": "Europe/Madrid"
+        }
+      },
+      "id": "trigger-cron",
+      "name": "Trigger: Friday 22:30 CET",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.2,
+      "position": [100, 300],
+      "description": "Triggers every Friday at 22:30 Europe/Madrid timezone to fetch the latest COT report"
+    },
+    {
+      "parameters": {
+        "url": "https://publicreporting.cftc.gov/resource/jun7-fc8e.json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$limit",
+              "value": "10000"
+            },
+            {
+              "name": "$where",
+              "value": "report_date >= '2024-01-01'"
+            },
+            {
+              "name": "$order",
+              "value": "report_date DESC"
+            }
+          ]
+        }
+      },
+      "id": "fetch-cot-data",
+      "name": "Fetch COT Data from CFTC API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 300],
+      "description": "Fetches Commitment of Traders data from CFTC public API. The API returns JSON with fields: report_date, market_name, long_commercial, short_commercial, long_noncommercial, short_noncommercial, etc."
+    },
+    {
+      "parameters": {
+        "jsCode": "// COT Market Name Mapping\nconst marketMapping = {\n  'EURO FX': 'EURUSD',\n  'JAPANESE YEN': 'USDJPY',\n  'BRITISH POUND': 'GBPUSD',\n  'SWISS FRANC': 'USDCHF',\n  'CANADIAN DOLLAR': 'USDCAD',\n  'AUSTRALIAN DOLLAR': 'AUDUSD',\n  'S&P 500 STOCK INDEX': 'ES',\n  'NASDAQ-100 STOCK INDEX': 'NQ',\n  'CRUDE OIL, LIGHT SWEET': 'CL',\n  'GOLD': 'XAUUSD',\n  'SILVER': 'XAGUSD',\n  'BITCOIN': 'BTC'\n};\n\nconst targetMarkets = Object.keys(marketMapping);\n\n// Get the input data\nconst items = $input.all();\nconst rawData = items[0].json;\n\n// CFTC API returns results array\nconst records = rawData.results || rawData || [];\n\n// Filter and map records\nconst filteredRecords = records\n  .filter(record => {\n    const marketName = record.market_name || '';\n    return targetMarkets.includes(marketName);\n  })\n  .map(record => {\n    const marketName = record.market_name || '';\n    return {\n      symbol: marketMapping[marketName],\n      market_name: marketName,\n      report_date: record.report_date,\n      long_commercial: parseInt(record.long_commercial) || 0,\n      short_commercial: parseInt(record.short_commercial) || 0,\n      long_noncommercial: parseInt(record.long_noncommercial) || 0,\n      short_noncommercial: parseInt(record.short_noncommercial) || 0,\n      net_commercial: (parseInt(record.long_commercial) || 0) - (parseInt(record.short_commercial) || 0),\n      net_noncommercial: (parseInt(record.long_noncommercial) || 0) - (parseInt(record.short_noncommercial) || 0)\n    };\n  });\n\n// Group by symbol and get most recent\nconst latestBySymbol = {};\nfilteredRecords.forEach(record => {\n  const existing = latestBySymbol[record.symbol];\n  if (!existing || new Date(record.report_date) > new Date(existing.report_date)) {\n    latestBySymbol[record.symbol] = record;\n  }\n});\n\n// Return as array\nconst result = Object.values(latestBySymbol);\n\nreturn result.map(item => ({ json: item }));"
+      },
+      "id": "parse-filter-cot",
+      "name": "Parse & Filter COT Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 300],
+      "description": "Filters COT data to keep only the configured markets and maps CFTC market names to trading symbols. Also calculates basic net positions for commercial and non-commercial traders."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load cached history for comparison\nconst fs = require('fs');\nconst path = require('path');\n\nconst cacheDir = '/data/cache';\nconst historyPath = path.join(cacheDir, 'cot_history.json');\n\nlet history = {};\ntry {\n  if (fs.existsSync(historyPath)) {\n    const historyData = fs.readFileSync(historyPath, 'utf8');\n    history = JSON.parse(historyData);\n  }\n} catch (e) {\n  // No history yet, will be created\n}\n\n// Get current week data\nconst currentData = $input.all();\nconst currentWeekDate = new Date().toISOString().split('T')[0];\n\nconst results = [];\n\nfor (const item of currentData) {\n  const record = item.json;\n  const symbol = record.symbol;\n\n  // Get previous week data for comparison\n  const prevWeek = history[symbol] || null;\n  const prevNetCommercial = prevWeek ? prevWeek.net_commercial : 0;\n  const prevNetNonCommercial = prevWeek ? prevWeek.net_noncommercial : 0;\n\n  // Calculate weekly change\n  const cambioSemanalCommercial = record.net_commercial - prevNetCommercial;\n  const cambioSemanalNonCommercial = record.net_noncommercial - prevNetNonCommercial;\n\n  // Calculate total open interest for percentage calculations\n  const totalLong = record.long_commercial + record.long_noncommercial;\n  const totalShort = record.short_commercial + record.short_noncommercial;\n  const totalOpenInterest = totalLong + totalShort;\n\n  // Institutional bias: based on non-commercial net position as % of open interest\n  let sesgoInstitucional = 'NEUTRAL';\n  if (totalOpenInterest > 0) {\n    const nonCommercialPct = (record.net_noncommercial / totalOpenInterest) * 100;\n    if (nonCommercialPct > 10) {\n      sesgoInstitucional = 'LONG';\n    } else if (nonCommercialPct < -10) {\n      sesgoInstitucional = 'SHORT';\n    }\n  }\n\n  // Calculate historical percentile\n  // We need to track historical values - for now, use prevWeek data if available\n  let extremoHistorico = false;\n  if (prevWeek && prevWeek.historicalValues && prevWeek.historicalValues.length >= 4) {\n    const historicalValues = prevWeek.historicalValues;\n    const currentNetNonComm = record.net_noncommercial;\n\n    // Calculate percentile\n    const sorted = [...historicalValues].sort((a, b) => a - b);\n    const below = sorted.filter(v => v < currentNetNonComm).length;\n    const percentile = (below / sorted.length) * 100;\n\n    extremoHistorico = percentile > 80 || percentile < 20;\n  }\n\n  // Build result\n  const resultRecord = {\n    ...record,\n    week_date: currentWeekDate,\n    cambio_semanal_commercial: cambioSemanalCommercial,\n    cambio_semanal_noncommercial: cambioSemanalNonCommercial,\n    sesgo_institucional: sesgoInstitucional,\n    extremo_historico: extremoHistorico,\n    timestamp: new Date().toISOString()\n  };\n\n  results.push({ json: resultRecord });\n}\n\nreturn results;"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate COT Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 300],
+      "description": "Calculates weekly changes, institutional bias (LONG/SHORT/NEUTRAL based on ±10% threshold), and historical extreme indicators. Compares current positions with cached previous week data."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format summary report\nconst items = $input.all();\n\nconst currentDate = new Date();\nconst weekFecha = currentDate.toISOString().split('T')[0];\n\nlet summary = `REPORTE COT — Semana ${weekFecha}\\n\\n`;\n\nconst marketEmojis = {\n  'EURUSD': '🇪🇺💱',\n  'USDJPY': '💴',\n  'GBPUSD': '🇬🇧💱',\n  'USDCHF': '🇨🇭',\n  'USDCAD': '🇨🇦',\n  'AUDUSD': '🇦🇺💱',\n  'ES': '📊 SP500',\n  'NQ': '📈 NASDAQ',\n  'CL': '🛢️ Oil',\n  'XAUUSD': '🥇 Gold',\n  'XAGUSD': '🥈 Silver',\n  'BTC': '₿ Bitcoin'\n};\n\nfor (const item of items) {\n  const r = item.json;\n  const emoji = marketEmojis[r.symbol] || '📦';\n\n  // Direction indicators\n  const direccion = r.sesgo_institucional;\n  const dirEmoji = direccion === 'LONG' ? '📈' : direccion === 'SHORT' ? '📉' : '➡️';\n\n  // Change indicators\n  const cambioComm = r.cambio_semanal_commercial || 0;\n  const cambioEmoji = cambioComm > 0 ? '🔺' : cambioComm < 0 ? '🔻' : '➡️';\n\n  // Extreme warning\n  const extremoWarning = r.extremo_historico ? '\\n   ⚠️ EXTREMO HISTÓRICO' : '';\n\n  summary += `${emoji} ${r.symbol}: Institucionales ${direccion} ${dirEmoji} neto ${r.net_noncommercial} contratos\\n`;\n  summary += `   (cambio: ${cambioEmoji} ${Math.abs(cambioComm)} vs semana anterior)${extremoWarning}\\n\\n`;\n}\n\nsummary += `\\nGenerado: ${new Date().toISOString()}`;\n\nreturn [{ json: { summary, week_date: weekFecha } }];"
+      },
+      "id": "format-summary",
+      "name": "Format Summary Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 300],
+      "description": "Formats the COT data into a human-readable summary with emojis for easy visual parsing. Includes market direction, weekly changes, and historical extreme warnings."
+    },
+    {
+      "parameters": {
+        "filePath": "/data/cache/cot_latest.json",
+        "options": {}
+      },
+      "id": "store-latest-json",
+      "name": "Store Latest COT JSON",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1200, 200],
+      "description": "Stores the latest COT data as JSON to /data/cache/cot_latest.json for quick access by other workflows or systems"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rotate and store 52-week history\nconst fs = require('fs');\nconst path = require('path');\n\nconst cacheDir = '/data/cache';\nconst historyPath = path.join(cacheDir, 'cot_history.json');\n\n// Ensure cache directory exists\nif (!fs.existsSync(cacheDir)) {\n  fs.mkdirSync(cacheDir, { recursive: true });\n}\n\n// Load existing history\nlet history = {};\ntry {\n  if (fs.existsSync(historyPath)) {\n    history = JSON.parse(fs.readFileSync(historyPath, 'utf8'));\n  }\n} catch (e) {\n  history = {};\n}\n\nconst currentWeekDate = new Date().toISOString().split('T')[0];\nconst items = $input.all();\n\n// Update history with current week data\nfor (const item of items) {\n  const record = item.json;\n  const symbol = record.symbol;\n\n  if (!history[symbol]) {\n    history[symbol] = {\n      historicalValues: [],\n      weeklyData: []\n    };\n  }\n\n  // Add current net position to historical values\n  history[symbol].historicalValues.push(record.net_noncommercial);\n  history[symbol].weeklyData.unshift({\n    date: currentWeekDate,\n    net_commercial: record.net_commercial,\n    net_noncommercial: record.net_noncommercial,\n    long_commercial: record.long_commercial,\n    short_commercial: record.short_commercial,\n    long_noncommercial: record.long_noncommercial,\n    short_noncommercial: record.short_noncommercial\n  });\n\n  // Keep only last 52 weeks\n  if (history[symbol].historicalValues.length > 52) {\n    history[symbol].historicalValues = history[symbol].historicalValues.slice(-52);\n  }\n  if (history[symbol].weeklyData.length > 52) {\n    history[symbol].weeklyData = history[symbol].weeklyData.slice(0, 52);\n  }\n}\n\n// Save updated history\nfs.writeFileSync(historyPath, JSON.stringify(history, null, 2));\n\nreturn [{ json: { stored: true, records: items.length, historyPath } }];"
+      },
+      "id": "store-history",
+      "name": "Store COT History (52 weeks)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400],
+      "description": "Maintains a 52-week rolling history of COT data in /data/cache/cot_history.json. Updates historical values array for percentile calculations and stores weekly snapshots."
+    },
+    {
+      "parameters": {
+        "filePath": "/data/cache/cot_summary.txt",
+        "options": {}
+      },
+      "id": "store-summary-txt",
+      "name": "Store Summary TXT",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1200, 600],
+      "description": "Stores formatted summary as /data/cache/cot_summary.txt for quick human review"
+    },
+    {
+      "parameters": {
+        "path": "cot-latest",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-cot-latest",
+      "name": "Webhook GET /webhook/cot-latest",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1420, 300],
+      "webhookId": "cot-latest",
+      "description": "HTTP GET endpoint to retrieve the formatted COT summary report"
+    },
+    {
+      "parameters": {
+        "path": "cot-data",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-cot-data",
+      "name": "Webhook GET /webhook/cot-data",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [1420, 500],
+      "webhookId": "cot-data",
+      "description": "HTTP GET endpoint to retrieve full COT data as JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare webhook responses\nconst fs = require('fs');\nconst path = require('path');\n\nconst cacheDir = '/data/cache';\nconst latestPath = path.join(cacheDir, 'cot_latest.json');\nconst summaryPath = path.join(cacheDir, 'cot_summary.txt');\n\n// Return latest data for cot-data webhook\nlet latestData = null;\ntry {\n  if (fs.existsSync(latestPath)) {\n    latestData = JSON.parse(fs.readFileSync(latestPath, 'utf8'));\n  }\n} catch (e) {\n  latestData = { error: 'No data available' };\n}\n\nreturn [{ json: latestData }];"
+      },
+      "id": "prepare-cot-data-response",
+      "name": "Prepare cot-data Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 500],
+      "description": "Loads cached COT data from file for the cot-data webhook endpoint"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare summary for cot-latest webhook\nconst fs = require('fs');\nconst path = require('path');\n\nconst cacheDir = '/data/cache';\nconst summaryPath = path.join(cacheDir, 'cot_summary.txt');\n\nlet summary = 'No summary available';\ntry {\n  if (fs.existsSync(summaryPath)) {\n    summary = fs.readFileSync(summaryPath, 'utf8');\n  }\n} catch (e) {\n  // Return default\n}\n\nreturn [{ json: { summary } }];"
+      },
+      "id": "prepare-summary-response",
+      "name": "Prepare Summary Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 300],
+      "description": "Loads cached summary from file for the cot-latest webhook endpoint"
+    }
+  ],
+  "connections": {
+    "Trigger: Friday 22:30 CET": {
+      "main": [
+        [
+          {
+            "node": "Fetch COT Data from CFTC API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch COT Data from CFTC API": {
+      "main": [
+        [
+          {
+            "node": "Parse & Filter COT Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Filter COT Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate COT Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate COT Metrics": {
+      "main": [
+        [
+          {
+            "node": "Format Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary Report": {
+      "main": [
+        [
+          {
+            "node": "Store Latest COT JSON",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store COT History (52 weeks)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Store Summary TXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook GET /webhook/cot-latest": {
+      "main": [
+        [
+          {
+            "node": "Prepare Summary Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Summary Response": {
+      "main": [
+        [
+          {
+            "node": "Webhook GET /webhook/cot-latest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook GET /webhook/cot-data": {
+      "main": [
+        [
+          {
+            "node": "Prepare cot-data Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare cot-data Response": {
+      "main": [
+        [
+          {
+            "node": "Webhook GET /webhook/cot-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["COT", "weekly", "trading", "CFTC"],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "templateId": ""
+  },
+  "versionId": "1",
+  "id": "cot_weekly_update",
+  "description": "Fetches CFTC Commitment of Traders report every Friday at 22:30 CET, processes 12 markets (Forex, Indexes, Energy, Metals, Crypto), calculates institutional bias and historical extremes, stores cache files, and exposes webhooks.",
+  "triggerCount": 1,
+  "usedScopes": []
+}
