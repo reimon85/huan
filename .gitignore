@@ -2,6 +2,10 @@
 .env
 .env.local
 .env.*.local
+*.local
+
+# n8n data (contains credentials)
+trading-agent/.env.local
 
 # Data (runtime generated)
 data/
