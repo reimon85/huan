@@ -1,139 +1,154 @@
-# Trading Companion AI
+# Trading Companion (Hermes Agent)
 
-Agente de IA copiloto para trading discrecional con base de conocimiento wiki y automatización n8n.
+Copiloto de IA para trading discrecional, ahora basado en **Hermes Agent**.
 
-## Stack Tecnológico
+## Arquitectura
 
-- **n8n** (self-hosted via Docker) — Orquestación de workflows
-- **FastAPI** — API REST para wiki
-- **Python 3.11+** — Agente IA y servicios
-- **SQLite FTS5** — Búsqueda full-text
-- **NetworkX** — Knowledge graph
+Este proyecto es un **plugin + skills pack** para Hermes Agent. No es una aplicación standalone: Hermes es el motor, y este repo aporta:
 
-## Estructura del Proyecto
+- **Skills de trading** en `.hermes/skills/` — prompts estructurados invocables via `/briefing`, `/validate`, `/macro`, `/debrief`
+- **Tools de datos** en `trading_companion/tools/` — obtienen precios, calendario, sentiment, noticias, COT, crypto y wiki
+- **Contexto persistente** via `AGENTS.md`, `SOUL.md`, `MEMORY.md`, `USER.md`
+- **Plugin** en `.hermes/plugins/trading-companion/` para auto-registro de tools
 
-```
-trading-agent/          # Automatización n8n
-├── docker-compose.yml  # n8n self-hosted
-├── workflows/          # 11 workflows JSON
-└── data/               # Datos runtime
+## Requisitos
 
-trading_companion/      # Agente IA Python
-├── wiki/               # Base de conocimiento
-│   ├── models/         # Modelos de datos
-│   ├── repository/      # Markdown + SQLite FTS5
-│   ├── services/       # Lógica de negocio
-│   └── content/seeds/   # Contenido inicial
-├── agents/             # Integración IA
-├── core/               # Config, exceptions
-└── main.py             # FastAPI app
-```
+- Python 3.11+
+- [Hermes Agent](https://github.com/NousResearch/hermes-agent) instalado
+- n8n (opcional, legacy) para workflows de datos de mercado
 
-## Quick Start
-
-### 1. Levantar n8n
+## Instalación
 
 ```bash
-cd trading-agent
-cp .env.example .env.local
-# Editar .env.local con passwords y API keys
-docker-compose up -d
-# Acceder: http://localhost:5678
-```
-
-### 2. Importar Workflows en n8n
-
-1. Abrir n8n → Settings → Import from File
-2. Importar en orden:
-   - `workflows/economic_calendar_daily.json`
-   - `workflows/news_monitor_realtime.json`
-   - `workflows/cot_weekly_update.json`
-   - `workflows/sentiment_snapshot.json`
-   - `workflows/price_feed_yahoo.json`
-   - `workflows/crypto_funding_rates.json`
-   - `workflows/crypto_oi_liquidations.json`
-   - `workflows/crypto_global_metrics.json`
-   - `workflows/crypto_snapshot_aggregator.json`
-   - `workflows/premarket_briefing.json`
-   - `workflows/critical_event_alert.json`
-
-### 3. Configurar API Keys en .env.local
-
-```bash
-N8N_BASIC_AUTH_PASSWORD=tu_password_seguro
-ANTHROPIC_API_KEY=sk-ant-...
-LLM_MODEL=claude-3-5-sonnet-20241022
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
-```
-
-## Workflows n8n — 26 Endpoints
-
-| Módulo | Trigger | Función |
-|--------|---------|---------|
-| Calendario | 06:00 L-V | Eventos macro del día |
-| News Monitor | 15 min, 24/7 | RSS feeds clasificados |
-| COT Report | Viernes 22:30 | Posicionamiento CFTC |
-| Sentiment | Cada hora | Fear & Greed agregado |
-| Prices | 15 min L-V | Forex, índices, crypto |
-| Funding Rates | 5 min, 24/7 | 25+ exchanges crypto |
-| OI & Liq | 15 min, 24/7 | Open Interest crypto |
-| Crypto Global | Cada hora | Dominance, market cap |
-| Crypto Aggregator | 30 min | Snapshot crypto unificado |
-| Premarket Briefing | 06:30 L-V | Briefing IA completo |
-| Critical Alert | Webhook | Alertas urgentes Telegram |
-
-## Wiki del Agente
-
-Base de conocimiento en `trading_companion/wiki/content/seeds/`:
-
-- **Trading**: Fundamentos, Análisis Técnico, Gestión de Riesgo
-- **Trading Systems**: Price Action, Mean Reversion, Prompts IA
-- **Data Analysis**: Indicadores Técnicos
-- **Trading Bots**: Arquitectura
-- **Psicología**: Sesgos Cognitivos
-- **Regulación**: Marco Legal
-
-## API REST (Wiki)
-
-```bash
-# Levantar API
-cd trading_companion
+# 1. Instalar Trading Companion como paquete editable
 pip install -e .
-uvicorn trading_companion.main:app --reload
 
-# Endpoints
-GET /api/v1/wiki/branches
-GET /api/v1/wiki/branches/{branch}/tree
-GET /api/v1/wiki/search?q=RSI
-GET /api/v1/wiki/nodes/{id}
+# 2. Verificar que Hermes detecta el plugin
+hermes plugins
+
+# 3. Configurar modelo LLM
+hermes model
+
+# 4. Probar
+hermes
+> /briefing
 ```
 
-## Tests
+## Uso
+
+### CLI
+
+```bash
+hermes
+```
+
+Dentro de la sesión:
+- `/briefing` — Genera briefing pre-sesión completo
+- `/validate` — Valida un setup antes de entrar
+- `/macro` — Analiza un evento macro/geopolítico
+- `/debrief` — Debrief post-sesión con aprendizaje estructurado
+
+### Gateway (Telegram / Discord)
+
+```bash
+hermes gateway setup
+hermes gateway start
+```
+
+### Cron (automatización)
+
+```bash
+# Ejemplo: briefing diario a las 06:30
+hermes cron add --name "briefing-morning" --schedule "30 6 * * 1-5" --platform telegram --prompt "/briefing"
+```
+
+## Estructura
+
+```
+.
+├── AGENTS.md                    # Contexto del proyecto para Hermes
+├── SOUL.md                      # Identidad del agente de trading
+├── MEMORY.md                    # Memoria persistente (reglas, setups, errores)
+├── USER.md                      # Perfil del trader
+├── .hermes/
+│   ├── skills/
+│   │   ├── briefing/SKILL.md    # Skill: briefing pre-sesión
+│   │   ├── validate/SKILL.md    # Skill: validación de setup
+│   │   ├── macro/SKILL.md       # Skill: análisis macro/geopolítico
+│   │   └── debrief/SKILL.md     # Skill: debrief post-sesión
+│   └── plugins/
+│       └── trading-companion/   # Plugin con tools de datos
+├── trading_companion/
+│   ├── tools/
+│   │   ├── market_data.py       # Tools: precios, calendario, sentiment, etc.
+│   │   └── wiki_context.py      # Tool: búsqueda en wiki interna
+│   └── wiki/                    # Base de conocimiento legacy (Markdown)
+├── trading-agent/               # n8n workflows (legacy, opcional)
+└── tests/
+```
+
+## Tools registradas
+
+| Tool | Función | Emoji |
+|------|---------|-------|
+| `fetch_market_context` | Contexto completo de mercado | 📊 |
+| `fetch_prices` | Precios actuales | 💹 |
+| `fetch_calendar` | Calendario económico | 📅 |
+| `fetch_sentiment` | Fear & Greed, VIX | 🧠 |
+| `fetch_news` | Noticias urgentes | 📰 |
+| `fetch_cot` | Reporte COT semanal | 📈 |
+| `fetch_crypto_snapshot` | Funding, OI, dominance | 🪙 |
+| `fetch_wiki_context` | Búsqueda en wiki interna | 📚 |
+
+## Datos de mercado
+
+Las tools obtienen datos directamente de fuentes públicas (sin API key):
+- **Precios**: Yahoo Finance (Forex, futuros, crypto, commodities)
+- **Calendario**: ForexFactory JSON público
+- **Sentiment**: Alternative.me Fear & Greed + VIX (Yahoo Finance)
+- **Noticias**: ForexLive RSS
+- **Crypto**: CoinGecko API pública
+- **COT**: CFTC (legacy fallback si n8n está disponible)
+
+n8n es ahora opcional/legacy. Si aún lo usas, configura `WEBHOOK_URL` en tu `.env`.
+
+## Seguridad
+
+### Protección de secretos
+
+- `.env` y `.env.local` están en `.gitignore` — nunca se suben
+- Solo `.env.example` (plantilla sin secretos) está trackeado
+- Pre-commit hooks con `detect-secrets` bloquean commits con API keys
+- `trading-agent/.env.local` (con secretos legacy) está en `.gitignore`
+
+### Configurar pre-commit
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+### Verificar que no hay secretos en el historial
+
+```bash
+detect-secrets scan > .secrets.baseline
+detect-secrets audit .secrets.baseline
+```
+
+### Rotar una key comprometida
+
+Si accidentalmente subiste una key a git:
+1. Rota la key inmediatamente en el proveedor (MiniMax, OpenRouter, etc.)
+2. Borra el archivo del historial: `git filter-repo --path <archivo> --invert-paths`
+3. Fuerza push al remoto (si ya se subió)
+
+## Desarrollo
 
 ```bash
 pip install -e ".[dev]"
 pytest --cov=trading_companion
 ```
-
-## Prompts del Agente IA
-
-El agente conversacional usa estos prompts estructurados:
-
-1. **System Prompt Maestro** — Identidad del agente
-2. **Análisis Macro** — Eventos geopolíticos/macro
-3. **Validación Setup** — Pre-entrada
-4. **Debrief Post-Sesión** — Aprendizaje estructurado
-
-## Arquitectura Feed-Agnostic
-
-Los módulos de precio siguen una capa de abstracción:
-
-```
-Feed Adapter → Normalizer → Cache → Webhook → Consumer (LLM)
-```
-
-Cambiar de Yahoo Finance a Polygon.io = solo cambiar el Feed Adapter.
 
 ## License
 

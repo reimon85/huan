@@ -6,7 +6,10 @@
       "name": "Cron Trigger",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -24,24 +27,34 @@
       "name": "Loris API Feed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "parameters": {
         "method": "GET",
         "url": "https://api.loris.tools/funding",
         "timeout": 10000,
-        "options": {}
+        "options": {},
+        "authentication": "none"
       },
-      "notes": "FAST: Fetch funding rates from Loris Tools. No API key required. Response: funding_rates[exchange][symbol]"
+      "notes": "FAST: Fetch funding rates from Loris Tools. No API key required. Response: funding_rates[exchange][symbol]",
+      "credentials": {}
     },
     {
       "id": "normalize",
       "name": "Normalize Funding Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 300],
+      "position": [
+        500,
+        300
+      ],
       "parameters": {
         "jsCode": "// Normalize funding rates to standard schema\n// Symbols to watch and primary exchanges\nconst SYMBOLS_WATCH = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'AVAX', 'MATIC', 'LINK'];\nconst EXCHANGES_PRIMARY = ['binance', 'bybit', 'okx', 'hyperliquid'];\n\nconst rawData = $input.first().json;\nconst fundingRates = rawData.funding_rates || rawData;\nconst timestamp = new Date().toISOString();\n\nconst normalized = [];\n\nfor (const symbol of SYMBOLS_WATCH) {\n  const rates = {};\n  let totalRate = 0;\n  let exchangeCount = 0;\n  let minRate = Infinity;\n  let maxRate = -Infinity;\n\n  for (const exchange of EXCHANGES_PRIMARY) {\n    const raw = fundingRates?.[exchange]?.[symbol];\n    if (raw !== undefined && raw !== null) {\n      const pct = raw / 10000;\n      const annualized = pct * 3 * 365; // Funding typically every 8h\n      rates[exchange] = {\n        raw,\n        pct,\n        annualized\n      };\n      totalRate += pct;\n      exchangeCount++;\n      if (pct < minRate) minRate = pct;\n      if (pct > maxRate) maxRate = pct;\n    }\n  }\n\n  if (exchangeCount > 0) {\n    const avgRatePrimary = totalRate / exchangeCount;\n    const maxSpread = maxRate - minRate;\n\n    // Determine consensus\n    let consensus = 'MIXED';\n    if (avgRatePrimary > 0.001) {\n      consensus = 'POSITIVE';\n    } else if (avgRatePrimary < -0.001) {\n      consensus = 'NEGATIVE';\n    }\n\n    normalized.push({\n      symbol,\n      source: 'loris',\n      delay_minutes: 1,\n      timestamp,\n      rates,\n      avg_rate_primary: avgRatePrimary,\n      max_spread: maxSpread,\n      consensus,\n      oi_rank: SYMBOLS_WATCH.indexOf(symbol) + 1\n    });\n  }\n}\n\nreturn { json: { symbols: normalized, timestamp, source: 'loris' } };",
-        "outputs": ["main"]
+        "outputs": [
+          "main"
+        ]
       },
       "notes": "FAST: Transform Loris API response to standard feed-agnostic schema. Values x10000 converted to decimal."
     },
@@ -50,10 +63,15 @@
       "name": "Signal Detection",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [750, 300],
+      "position": [
+        750,
+        300
+      ],
       "parameters": {
-        "jsCode": "// Detect funding rate signals\nconst normalizedData = $input.first().json;\nconst symbols = normalizedData.symbols || [];\nconst timestamp = normalizedData.timestamp;\n\nconst signals = [];\nconst alerts = [];\n\n// Thresholds\nconst HIGH_FUNDING_POSITIVE = 0.0005; // 0.05%\nconst EXTREME_NEGATIVE = -0.0003; // -0.03%\nconst DIVERGENCE_THRESHOLD = 0.0008; // 0.08%\n\nfor (const item of symbols) {\n  const { symbol, avg_rate_primary, max_spread, rates, consensus } = item;\n\n  // Signal: ALTA FUNDING POSITIVO\n  if (avg_rate_primary > HIGH_FUNDING_POSITIVE) {\n    const signal = {\n      type: 'HIGH_POSITIVE_FUNDING',\n      symbol,\n      severity: avg_rate_primary > 0.001 ? 'HIGH' : 'MEDIUM',\n      message: `Funding positivo elevado: ${(avg_rate_primary * 100).toFixed(3)}% (anualizado ${(avg_rate_primary * 3 * 365 * 100).toFixed(1)}%)`,\n      interpretation: 'Muchos longs pagando shorts — mercado sobrecalentado long',\n      rates\n    };\n    signals.push(signal);\n    if (signal.severity === 'HIGH') {\n      alerts.push({ symbol, type: 'HIGH_POSITIVE_FUNDING', urgency: 'alta', data: signal });\n    }\n  }\n\n  // Signal: FUNDING NEGATIVO EXTREMO\n  if (avg_rate_primary < EXTREME_NEGATIVE) {\n    const signal = {\n      type: 'EXTREME_NEGATIVE_FUNDING',\n      symbol,\n      severity: 'HIGH',\n      message: `Funding negativo extremo: ${(avg_rate_primary * 100).toFixed(3)}%`,\n      interpretation: 'Shorts pagando longs — presión short extrema',\n      rates\n    };\n    signals.push(signal);\n    alerts.push({ symbol, type: 'EXTREME_NEGATIVE_FUNDING', urgency: 'alta', data: signal });\n  }\n\n  // Signal: DIVERGENCIA entre exchanges\n  if (max_spread > DIVERGENCE_THRESHOLD) {\n    const signal = {\n      type: 'FUNDING_DIVERGENCE',\n      symbol,\n      severity: 'MEDIUM',\n      message: `Divergencia: spread ${(max_spread * 100).toFixed(3)}% entre exchanges`,\n      interpretation: 'Desacuerdo entre exchanges sobre valoración del riesgo',\n      rates\n    };\n    signals.push(signal);\n  }\n}\n\n// Global reading\nconst positiveCount = symbols.filter(s => s.avg_rate_primary > HIGH_FUNDING_POSITIVE).length;\nconst negativeCount = symbols.filter(s => s.avg_rate_primary < EXTREME_NEGATIVE).length;\n\nlet globalReading = 'NEUTRAL';\nif (positiveCount >= 3) globalReading = 'OVERHEATED';\nelse if (negativeCount >= 2) globalReading = 'UNDERHEATED';\nelse if (positiveCount > negativeCount) globalReading = 'BULLISH_SKEW';\nelse if (negativeCount > positiveCount) globalReading = 'BEARISH_SKEW';\n\nreturn {\n  json: {\n    signals,\n    alerts,\n    global_reading: globalReading,\n    summary: {\n      positive_count: positiveCount,\n      negative_count: negativeCount,\n      total_symbols: symbols.length\n    },\n    symbols,\n    timestamp\n  }\n};",
-        "outputs": ["main"]
+        "jsCode": "// Detect funding rate signals\nconst normalizedData = $input.first().json;\nconst symbols = normalizedData.symbols || [];\nconst timestamp = normalizedData.timestamp;\n\nconst signals = [];\nconst alerts = [];\n\n// Thresholds\nconst HIGH_FUNDING_POSITIVE = 0.0005; // 0.05%\nconst EXTREME_NEGATIVE = -0.0003; // -0.03%\nconst DIVERGENCE_THRESHOLD = 0.0008; // 0.08%\n\nfor (const item of symbols) {\n  const { symbol, avg_rate_primary, max_spread, rates, consensus } = item;\n\n  // Signal: ALTA FUNDING POSITIVO\n  if (avg_rate_primary > HIGH_FUNDING_POSITIVE) {\n    const signal = {\n      type: 'HIGH_POSITIVE_FUNDING',\n      symbol,\n      severity: avg_rate_primary > 0.001 ? 'HIGH' : 'MEDIUM',\n      message: `Funding positivo elevado: ${(avg_rate_primary * 100).toFixed(3)}% (anualizado ${(avg_rate_primary * 3 * 365 * 100).toFixed(1)}%)`,\n      interpretation: 'Muchos longs pagando shorts \u2014 mercado sobrecalentado long',\n      rates\n    };\n    signals.push(signal);\n    if (signal.severity === 'HIGH') {\n      alerts.push({ symbol, type: 'HIGH_POSITIVE_FUNDING', urgency: 'alta', data: signal });\n    }\n  }\n\n  // Signal: FUNDING NEGATIVO EXTREMO\n  if (avg_rate_primary < EXTREME_NEGATIVE) {\n    const signal = {\n      type: 'EXTREME_NEGATIVE_FUNDING',\n      symbol,\n      severity: 'HIGH',\n      message: `Funding negativo extremo: ${(avg_rate_primary * 100).toFixed(3)}%`,\n      interpretation: 'Shorts pagando longs \u2014 presi\u00f3n short extrema',\n      rates\n    };\n    signals.push(signal);\n    alerts.push({ symbol, type: 'EXTREME_NEGATIVE_FUNDING', urgency: 'alta', data: signal });\n  }\n\n  // Signal: DIVERGENCIA entre exchanges\n  if (max_spread > DIVERGENCE_THRESHOLD) {\n    const signal = {\n      type: 'FUNDING_DIVERGENCE',\n      symbol,\n      severity: 'MEDIUM',\n      message: `Divergencia: spread ${(max_spread * 100).toFixed(3)}% entre exchanges`,\n      interpretation: 'Desacuerdo entre exchanges sobre valoraci\u00f3n del riesgo',\n      rates\n    };\n    signals.push(signal);\n  }\n}\n\n// Global reading\nconst positiveCount = symbols.filter(s => s.avg_rate_primary > HIGH_FUNDING_POSITIVE).length;\nconst negativeCount = symbols.filter(s => s.avg_rate_primary < EXTREME_NEGATIVE).length;\n\nlet globalReading = 'NEUTRAL';\nif (positiveCount >= 3) globalReading = 'OVERHEATED';\nelse if (negativeCount >= 2) globalReading = 'UNDERHEATED';\nelse if (positiveCount > negativeCount) globalReading = 'BULLISH_SKEW';\nelse if (negativeCount > positiveCount) globalReading = 'BEARISH_SKEW';\n\nreturn {\n  json: {\n    signals,\n    alerts,\n    global_reading: globalReading,\n    summary: {\n      positive_count: positiveCount,\n      negative_count: negativeCount,\n      total_symbols: symbols.length\n    },\n    symbols,\n    timestamp\n  }\n};",
+        "outputs": [
+          "main"
+        ]
       },
       "notes": "FAST: Detect funding rate signals based on thresholds. Triggers alerts for HIGH severity."
     },
@@ -62,10 +80,15 @@
       "name": "Format Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 300],
+      "position": [
+        1000,
+        300
+      ],
       "parameters": {
-        "jsCode": "// Format human-readable summary\nconst signalData = $input.first().json;\nconst symbols = signalData.symbols || [];\nconst signals = signalData.signals || [];\nconst globalReading = signalData.global_reading || 'NEUTRAL';\nconst timestamp = new Date();\n\nconst fecha = timestamp.toISOString().split('T')[0];\nconst hora = timestamp.toTimeString().split(' ')[0];\n\nlet summary = `FUNDING RATES — ${fecha} ${hora}\\n`;\nsummary += `Fuente: Loris Tools (25+ exchanges)\\n`;\nsummary += `RESUMEN POR ACTIVO:\\n`;\n\nfor (const item of symbols) {\n  const { symbol, rates, consensus, avg_rate_primary } = item;\n  const rateStrings = [];\n  for (const [exchange, data] of Object.entries(rates)) {\n    rateStrings.push(`${exchange.charAt(0).toUpperCase() + exchange.slice(1)} ${(data.pct * 100).toFixed(2)}%`);\n  }\n  const rateStr = rateStrings.join(' | ');\n  summary += `${symbol}: ${rateStr} → Sesgo: ${consensus}\\n`;\n}\n\nif (signals.length > 0) {\n  summary += `\\nSEÑALES DETECTADAS:\\n`;\n  for (const signal of signals) {\n    if (signal.severity === 'HIGH') {\n      summary += `⚠️ ${signal.symbol}: ${signal.message} — ${signal.interpretation}\\n`;\n    }\n  }\n}\n\nsummary += `\\nLECTURA GLOBAL:\\n`;\nsummary += `Funding ${globalReading.toLowerCase()} en ${symbols.filter(s => s.consensus === 'POSITIVE').length} activos → mercado en modo ${globalReading}\\n`;\n\nreturn {\n  json: {\n    summary,\n    global_reading: globalReading,\n    signals,\n    symbols,\n    timestamp: signalData.timestamp\n  }\n};",
-        "outputs": ["main"]
+        "jsCode": "// Format human-readable summary\nconst signalData = $input.first().json;\nconst symbols = signalData.symbols || [];\nconst signals = signalData.signals || [];\nconst globalReading = signalData.global_reading || 'NEUTRAL';\nconst timestamp = new Date();\n\nconst fecha = timestamp.toISOString().split('T')[0];\nconst hora = timestamp.toTimeString().split(' ')[0];\n\nlet summary = `FUNDING RATES \u2014 ${fecha} ${hora}\\n`;\nsummary += `Fuente: Loris Tools (25+ exchanges)\\n`;\nsummary += `RESUMEN POR ACTIVO:\\n`;\n\nfor (const item of symbols) {\n  const { symbol, rates, consensus, avg_rate_primary } = item;\n  const rateStrings = [];\n  for (const [exchange, data] of Object.entries(rates)) {\n    rateStrings.push(`${exchange.charAt(0).toUpperCase() + exchange.slice(1)} ${(data.pct * 100).toFixed(2)}%`);\n  }\n  const rateStr = rateStrings.join(' | ');\n  summary += `${symbol}: ${rateStr} \u2192 Sesgo: ${consensus}\\n`;\n}\n\nif (signals.length > 0) {\n  summary += `\\nSE\u00d1ALES DETECTADAS:\\n`;\n  for (const signal of signals) {\n    if (signal.severity === 'HIGH') {\n      summary += `\u26a0\ufe0f ${signal.symbol}: ${signal.message} \u2014 ${signal.interpretation}\\n`;\n    }\n  }\n}\n\nsummary += `\\nLECTURA GLOBAL:\\n`;\nsummary += `Funding ${globalReading.toLowerCase()} en ${symbols.filter(s => s.consensus === 'POSITIVE').length} activos \u2192 mercado en modo ${globalReading}\\n`;\n\nreturn {\n  json: {\n    summary,\n    global_reading: globalReading,\n    signals,\n    symbols,\n    timestamp: signalData.timestamp\n  }\n};",
+        "outputs": [
+          "main"
+        ]
       },
       "notes": "FAST: Format human-readable summary for display and notifications"
     },
@@ -74,7 +97,10 @@
       "name": "Store Latest",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [1250, 150],
+      "position": [
+        1250,
+        150
+      ],
       "parameters": {
         "fileName": "/data/cache/funding_latest.json",
         "data": "={{ JSON.stringify($('Format Summary').first().json) }}",
@@ -90,7 +116,10 @@
       "name": "Store Snapshot TXT",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [1250, 300],
+      "position": [
+        1250,
+        300
+      ],
       "parameters": {
         "fileName": "/data/cache/funding_snapshot.txt",
         "data": "={{ $('Format Summary').first().json.summary }}",
@@ -106,7 +135,10 @@
       "name": "Store History",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [1250, 450],
+      "position": [
+        1250,
+        450
+      ],
       "parameters": {
         "fileName": "/data/cache/funding_history.json",
         "data": "={{ JSON.stringify($('Format Summary').first().json) }}",
@@ -122,7 +154,10 @@
       "name": "Store Signals",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [1250, 600],
+      "position": [
+        1250,
+        600
+      ],
       "parameters": {
         "fileName": "/data/cache/funding_signals.json",
         "data": "={{ JSON.stringify($('Signal Detection').first().json.signals || []) }}",
@@ -138,7 +173,10 @@
       "name": "Webhook: Snapshot",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [1500, 300],
+      "position": [
+        1500,
+        300
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "funding",
@@ -155,21 +193,29 @@
       "name": "Webhook: Raw JSON",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1500, 500],
+      "position": [
+        1500,
+        500
+      ],
       "parameters": {
         "method": "GET",
         "url": "=https://placeholder.invalid/webhook/funding-raw",
         "timeout": 5000,
-        "options": {}
+        "options": {},
+        "authentication": "none"
       },
-      "notes": "FAST: Returns normalized JSON data via GET /webhook/funding-raw"
+      "notes": "FAST: Returns normalized JSON data via GET /webhook/funding-raw",
+      "credentials": {}
     },
     {
       "id": "webhook-signals",
       "name": "Webhook: Signals",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [1500, 700],
+      "position": [
+        1500,
+        700
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "funding-signals",
@@ -186,7 +232,10 @@
       "name": "Webhook: By Symbol",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [1750, 300],
+      "position": [
+        1750,
+        300
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "funding-symbol",
@@ -203,7 +252,10 @@
       "name": "Check Alert Urgency",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1000, 600],
+      "position": [
+        1000,
+        600
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -233,14 +285,19 @@
       "name": "Send Alert Webhook",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1250, 750],
+      "position": [
+        1250,
+        750
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{$env.WEBHOOK_URL}}/webhook/crypto-alert",
         "timeout": 10000,
-        "options": {}
+        "options": {},
+        "authentication": "none"
       },
-      "notes": "FAST: POST alert to crypto-alert webhook if urgency is alta"
+      "notes": "FAST: POST alert to crypto-alert webhook if urgency is alta",
+      "credentials": {}
     }
   ],
   "connections": {

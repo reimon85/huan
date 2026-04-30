@@ -19,6 +19,7 @@ from pathlib import Path
 # Configuration
 N8N_URL = os.getenv("N8N_URL", "http://localhost:5678")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://localhost:5678")
 
@@ -147,7 +148,10 @@ def call_claude(system_prompt: str, user_message: str) -> str:
 
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        client = anthropic.Anthropic(
+            api_key=ANTHROPIC_API_KEY,
+            base_url=ANTHROPIC_BASE_URL
+        )
 
         response = client.messages.create(
             model=ANTHROPIC_MODEL,
@@ -156,7 +160,19 @@ def call_claude(system_prompt: str, user_message: str) -> str:
             messages=[{"role": "user", "content": user_message}]
         )
 
-        return response.content[0].text
+        # Handle response - can be text or thinking blocks
+        if hasattr(response.content[0], 'text'):
+            return response.content[0].text
+        elif hasattr(response.content[0], 'thinking'):
+            # Return thinking + extracted text
+            thinking = response.content[0].thinking[:500] if response.content[0].thinking else ""
+            # Try to find a text block
+            for block in response.content:
+                if hasattr(block, 'text') and block.text:
+                    return f"[Thinking: {thinking}...]\n\n{block.text}"
+            return f"[Thinking: {thinking}...]"
+        else:
+            return str(response.content[0])
     except ImportError:
         return "Error: anthropic package not installed. Run: pip install anthropic"
     except Exception as e:

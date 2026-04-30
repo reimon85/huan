@@ -16,7 +16,10 @@
       "name": "Cron Trigger",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
-      "position": [100, 300],
+      "position": [
+        100,
+        300
+      ],
       "description": "Triggers every 15 minutes to fetch latest news from all RSS sources"
     },
     {
@@ -29,15 +32,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-reuters-business",
       "name": "Reuters Business",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, -200],
+      "position": [
+        300,
+        -200
+      ],
       "continueOnFail": true,
-      "description": "Reuters Business News RSS feed"
+      "description": "Reuters Business News RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -49,15 +57,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-reuters-top",
       "name": "Reuters Top News",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, -50],
+      "position": [
+        300,
+        -50
+      ],
       "continueOnFail": true,
-      "description": "Reuters Top News RSS feed"
+      "description": "Reuters Top News RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -69,15 +82,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-forexlive",
       "name": "ForexLive",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 100],
+      "position": [
+        300,
+        100
+      ],
       "continueOnFail": true,
-      "description": "ForexLive News RSS feed"
+      "description": "ForexLive News RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -89,15 +107,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-dailyfx",
       "name": "DailyFX",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 250],
+      "position": [
+        300,
+        250
+      ],
       "continueOnFail": true,
-      "description": "DailyFX Market News RSS feed"
+      "description": "DailyFX Market News RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -109,15 +132,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-eia-energy",
       "name": "EIA Energy",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 400],
+      "position": [
+        300,
+        400
+      ],
       "continueOnFail": true,
-      "description": "EIA Energy News RSS feed"
+      "description": "EIA Energy News RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -129,15 +157,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-oilprice",
       "name": "OilPrice",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 550],
+      "position": [
+        300,
+        550
+      ],
       "continueOnFail": true,
-      "description": "OilPrice RSS feed"
+      "description": "OilPrice RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -149,15 +182,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-cointelegraph",
       "name": "CoinTelegraph",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 700],
+      "position": [
+        300,
+        700
+      ],
       "continueOnFail": true,
-      "description": "CoinTelegraph RSS feed"
+      "description": "CoinTelegraph RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -169,15 +207,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-decrypt",
       "name": "Decrypt",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 850],
+      "position": [
+        300,
+        850
+      ],
       "continueOnFail": true,
-      "description": "Decrypt RSS feed"
+      "description": "Decrypt RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -189,15 +232,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-bbc-world",
       "name": "BBC World",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 1000],
+      "position": [
+        300,
+        1000
+      ],
       "continueOnFail": true,
-      "description": "BBC World News RSS feed"
+      "description": "BBC World News RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -209,15 +257,20 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-nytimes",
       "name": "NYTimes World",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 1150],
+      "position": [
+        300,
+        1150
+      ],
       "continueOnFail": true,
-      "description": "NYTimes World RSS feed"
+      "description": "NYTimes World RSS feed",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -227,7 +280,10 @@
       "name": "Merge Feeds",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 500],
+      "position": [
+        500,
+        500
+      ],
       "description": "Merges all RSS feed items into a single array"
     },
     {
@@ -238,7 +294,10 @@
       "name": "Filter & Classify",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 500],
+      "position": [
+        700,
+        500
+      ],
       "description": "Filters news from last 2 hours with priority keywords and classifies by category/urgency"
     },
     {
@@ -250,7 +309,10 @@
       "name": "Deduplicate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 500],
+      "position": [
+        900,
+        500
+      ],
       "description": "Removes duplicate news items by comparing against previously seen GUIDs"
     },
     {
@@ -262,7 +324,10 @@
       "name": "Store Feed",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 400],
+      "position": [
+        1100,
+        400
+      ],
       "description": "Stores news to news_feed.json (last 100 items, rotating old)"
     },
     {
@@ -274,15 +339,20 @@
         "jsonBody": "={{ $json }}",
         "options": {
           "timeout": 5000
-        }
+        },
+        "authentication": "none"
       },
       "id": "node-alert-webhook",
       "name": "Alert Webhook",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1300, 500],
+      "position": [
+        1300,
+        500
+      ],
       "continueOnFail": true,
-      "description": "Sends POST to webhook when high urgency news detected"
+      "description": "Sends POST to webhook when high urgency news detected",
+      "credentials": {}
     },
     {
       "parameters": {
@@ -311,7 +381,10 @@
       "name": "If High Urgency",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1100, 600],
+      "position": [
+        1100,
+        600
+      ],
       "description": "Branch flow only if news has high urgency flag"
     },
     {
@@ -332,7 +405,10 @@
       "name": "Webhook Latest",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [1500, 300],
+      "position": [
+        1500,
+        300
+      ],
       "webhookId": "news-latest",
       "description": "GET /webhook/news-latest - Returns last 20 classified news"
     },
@@ -354,7 +430,10 @@
       "name": "Webhook Urgent",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [1500, 700],
+      "position": [
+        1500,
+        700
+      ],
       "webhookId": "news-urgent",
       "description": "GET /webhook/news-urgent - Returns today's high urgency news"
     },
@@ -367,7 +446,10 @@
       "name": "Get Latest 20",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1300, 200],
+      "position": [
+        1300,
+        200
+      ],
       "description": "Reads last 20 news from feed file for webhook"
     },
     {
@@ -379,7 +461,10 @@
       "name": "Get Urgent",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1300, 600],
+      "position": [
+        1300,
+        600
+      ],
       "description": "Reads today's high urgency news from feed file for webhook"
     }
   ],
@@ -387,107 +472,255 @@
     "Cron Trigger": {
       "main": [
         [
-          { "node": "Reuters Business", "type": "main", "index": 0 },
-          { "node": "Reuters Top News", "type": "main", "index": 0 },
-          { "node": "ForexLive", "type": "main", "index": 0 },
-          { "node": "DailyFX", "type": "main", "index": 0 },
-          { "node": "EIA Energy", "type": "main", "index": 0 },
-          { "node": "OilPrice", "type": "main", "index": 0 },
-          { "node": "CoinTelegraph", "type": "main", "index": 0 },
-          { "node": "Decrypt", "type": "main", "index": 0 },
-          { "node": "BBC World", "type": "main", "index": 0 },
-          { "node": "NYTimes World", "type": "main", "index": 0 }
+          {
+            "node": "Reuters Business",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reuters Top News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ForexLive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DailyFX",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "EIA Energy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OilPrice",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CoinTelegraph",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Decrypt",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BBC World",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NYTimes World",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Reuters Business": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Reuters Top News": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "ForexLive": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "DailyFX": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "EIA Energy": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "OilPrice": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "CoinTelegraph": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Decrypt": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "BBC World": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "NYTimes World": {
       "main": [
-        [{ "node": "Merge Feeds", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Merge Feeds": {
       "main": [
-        [{ "node": "Filter & Classify", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Filter & Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Filter & Classify": {
       "main": [
-        [{ "node": "Deduplicate", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Deduplicate": {
       "main": [
-        [{ "node": "Store Feed", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Store Feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Store Feed": {
       "main": [
-        [{ "node": "If High Urgency", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "If High Urgency",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "If High Urgency": {
       "main": [
-        [{ "node": "Alert Webhook", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Alert Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Alert Webhook": {
       "main": [
-        [{ "node": "Webhook Latest", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Webhook Latest",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get Latest 20": {
       "main": [
-        [{ "node": "Webhook Latest", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Webhook Latest",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get Urgent": {
       "main": [
-        [{ "node": "Webhook Urgent", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Webhook Urgent",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -500,5 +733,11 @@
   "meta": {
     "templateCredentiallessUnchecked": true
   },
-  "tags": ["trading", "news", "monitor", "realtime", "rss"]
+  "tags": [
+    "trading",
+    "news",
+    "monitor",
+    "realtime",
+    "rss"
+  ]
 }

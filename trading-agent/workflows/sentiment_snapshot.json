@@ -16,7 +16,10 @@
       "name": "Trigger",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1.2,
-      "position": [100, 300],
+      "position": [
+        100,
+        300
+      ],
       "description": "Every hour 7:00-23:00 Madrid time (CET/CEST), Monday-Friday"
     },
     {
@@ -24,94 +27,127 @@
         "url": "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
         "options": {
           "timeout": 10000
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-cnn-fear-greed",
       "name": "CNN Fear & Greed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [340, 100],
-      "description": "Fetch CNN Fear & Greed index - score 0-100, rating text, change vs yesterday/week"
+      "position": [
+        340,
+        100
+      ],
+      "description": "Fetch CNN Fear & Greed index - score 0-100, rating text, change vs yesterday/week",
+      "credentials": {}
     },
     {
       "parameters": {
         "url": "https://api.alternative.me/fng/?limit=2&format=json",
         "options": {
           "timeout": 10000
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-crypto-fear-greed",
       "name": "Crypto Fear & Greed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [340, 220],
-      "description": "Fetch Crypto Fear & Greed index from Alternative.me - value, classification, change vs yesterday"
+      "position": [
+        340,
+        220
+      ],
+      "description": "Fetch Crypto Fear & Greed index from Alternative.me - value, classification, change vs yesterday",
+      "credentials": {}
     },
     {
       "parameters": {
         "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d",
         "options": {
           "timeout": 10000
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-vix",
       "name": "VIX",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [340, 340],
-      "description": "Fetch VIX from Yahoo Finance - last close, 5d change, level classification"
+      "position": [
+        340,
+        340
+      ],
+      "description": "Fetch VIX from Yahoo Finance - last close, 5d change, level classification",
+      "credentials": {}
     },
     {
       "parameters": {
         "url": "https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=5d",
         "options": {
           "timeout": 10000
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-dxy",
       "name": "DXY",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [340, 460],
-      "description": "Fetch US Dollar Index from Yahoo Finance - current price, weekly % change, trend"
+      "position": [
+        340,
+        460
+      ],
+      "description": "Fetch US Dollar Index from Yahoo Finance - current price, weekly % change, trend",
+      "credentials": {}
     },
     {
       "parameters": {
         "url": "https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=5d",
         "options": {
           "timeout": 10000
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-gold",
       "name": "Gold (XAUUSD)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [340, 580],
-      "description": "Fetch Gold price from Yahoo Finance for Gold/Oil ratio calculation"
+      "position": [
+        340,
+        580
+      ],
+      "description": "Fetch Gold price from Yahoo Finance for Gold/Oil ratio calculation",
+      "credentials": {}
     },
     {
       "parameters": {
         "url": "https://query1.finance.yahoo.com/v8/finance/chart/CL%3DF?interval=1d&range=5d",
         "options": {
           "timeout": 10000
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-oil",
       "name": "Oil (CL)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [340, 700],
-      "description": "Fetch Crude Oil price from Yahoo Finance for Gold/Oil ratio calculation"
+      "position": [
+        340,
+        700
+      ],
+      "description": "Fetch Crude Oil price from Yahoo Finance for Gold/Oil ratio calculation",
+      "credentials": {}
     },
     {
       "parameters": {
-        "jsCode": "// Sentiment Snapshot - Merge & Calculate Risk Appetite Score\n// Weights: CNN F&G 30%, Crypto F&G inverse 20%, VIX inverted 30%, DXY 20%\n\nconst now = new Date();\nconst madridOffset = 1; // CET (UTC+1), CEST would be 2 but n8n runs in server time\nconst fecha = now.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' });\nconst hora = now.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' });\n\n// Extract CNN Fear & Greed data\nlet cnnScore = 50;\nlet cnnRating = 'Neutral';\nlet cnnChangeYday = 0;\nlet cnnChangeWeek = 0;\n\nif ($input.first().json.fearandgreed) {\n  const fg = $input.first().json.fearandgreed;\n  cnnScore = fg.current?.value ?? 50;\n  cnnRating = fg.current?.rating ?? 'Neutral';\n  cnnChangeYday = fg.current?.previousClose !== undefined && fg.historical?.values?.[1] \n    ? Math.round((fg.current.value - fg.historical.values[1].value) * 10) / 10 \n    : 0;\n  cnnChangeWeek = fg.current?.oneWeekAgo !== undefined \n    ? Math.round((fg.current.value - fg.current.oneWeekAgo) * 10) / 10 \n    : 0;\n}\n\n// Extract Crypto Fear & Greed data\nlet cryptoScore = 50;\nlet cryptoRating = 'Neutral';\nlet cryptoChangeYday = 0;\n\nif ($input.item(1).json.data && $input.item(1).json.data.length >= 2) {\n  const today = $input.item(1).json.data[0];\n  const yesterday = $input.item(1).json.data[1];\n  cryptoScore = parseInt(today.value);\n  cryptoRating = today.value_classification;\n  cryptoChangeYday = cryptoScore - parseInt(yesterday.value);\n}\n\n// Extract VIX data\nlet vixClose = 20;\nlet vixChange5d = 0;\nlet vixLevel = 'medium';\n\nif ($input.item(2).json.chart && $input.item(2).json.chart.result && $input.item(2).json.chart.result[0]) {\n  const result = $input.item(2).json.chart.result[0];\n  const closes = result.indicators.quote[0].close.filter(c => c !== null);\n  if (closes.length > 0) {\n    vixClose = Math.round(closes[closes.length - 1] * 100) / 100;\n    if (closes.length >= 5) {\n      vixChange5d = Math.round((closes[closes.length - 1] - closes[closes.length - 5]) * 100) / 100;\n    }\n  }\n  if (vixClose < 15) vixLevel = 'low';\n  else if (vixClose <= 25) vixLevel = 'medium';\n  else vixLevel = 'high';\n}\n\n// Extract DXY data\nlet dxyPrice = 100;\nlet dxyChangeWeek = 0;\nlet dxyTrend = 'flat';\n\nif ($input.item(3).json.chart && $input.item(3).json.chart.result && $input.item(3).json.chart.result[0]) {\n  const result = $input.item(3).json.chart.result[0];\n  const closes = result.indicators.quote[0].close.filter(c => c !== null);\n  if (closes.length >= 2) {\n    dxyPrice = Math.round(closes[closes.length - 1] * 100) / 100;\n    dxyChangeWeek = Math.round(((closes[closes.length - 1] - closes[0]) / closes[0] * 100) * 100) / 100;\n    if (dxyChangeWeek > 0.5) dxyTrend = 'up';\n    else if (dxyChangeWeek < -0.5) dxyTrend = 'down';\n  }\n}\n\n// Extract Gold data\nlet goldPrice = 2000;\nif ($input.item(4).json.chart && $input.item(4).json.chart.result && $input.item(5).json.chart.result[0]) {\n  const goldResult = $input.item(4).json.chart.result[0];\n  const goldCloses = goldResult.indicators.quote[0].close.filter(c => c !== null);\n  if (goldCloses.length > 0) {\n    goldPrice = Math.round(goldCloses[goldCloses.length - 1] * 100) / 100;\n  }\n}\n\n// Extract Oil data and calculate Gold/Oil ratio\nlet oilPrice = 80;\nlet goldOilRatio = 25;\nlet goldOilTrend = 'flat';\n\nif ($input.item(5).json.chart && $input.item(5).json.chart.result && $input.item(5).json.chart.result[0]) {\n  const oilResult = $input.item(5).json.chart.result[0];\n  const oilCloses = oilResult.indicators.quote[0].close.filter(c => c !== null);\n  if (oilCloses.length > 0) {\n    oilPrice = Math.round(oilCloses[oilCloses.length - 1] * 100) / 100;\n    goldOilRatio = Math.round((goldPrice / oilPrice) * 100) / 100;\n    \n    // Calculate trend from first to last week value\n    if (oilCloses.length >= 5) {\n      const goldOilWeekAgo = goldPrice / oilCloses[0];\n      const currentRatio = goldPrice / oilCloses[oilCloses.length - 1];\n      const ratioChange = currentRatio - goldOilWeekAgo;\n      if (ratioChange > 0.5) goldOilTrend = 'up';\n      else if (ratioChange < -0.5) goldOilTrend = 'down';\n    }\n  }\n}\n\n// Calculate Risk Appetite Score (0-100)\n// CNN F&G: 30% weight (direct)\n// Crypto F&G: 20% weight (inverse - crypto leads risk-on)\n// VIX: 30% weight (inverted - high VIX = fear = low score)\n// DXY: 20% weight (inverse - high DXY = risk-off = low score)\n\n// Normalize VIX to 0-100 scale (VIX typically 10-40, with extremes to 80+)\nconst vixNormalized = Math.max(0, Math.min(100, 100 - ((vixClose - 10) / 60 * 100)));\n\n// Normalize DXY to 0-100 scale (DXY typically 95-105)\nconst dxyNormalized = Math.max(0, Math.min(100, 100 - ((dxyPrice - 95) / 15 * 100)));\n\nconst riskAppetiteScore = Math.round(\n  (cnnScore * 0.30) +\n  (cryptoScore * 0.20) +\n  (vixNormalized * 0.30) +\n  (dxyNormalized * 0.20)\n);\n\n// Classification\nlet classification;\nif (riskAppetiteScore <= 20) classification = 'RISK OFF EXTREMO';\nelse if (riskAppetiteScore <= 40) classification = 'RISK OFF';\nelse if (riskAppetiteScore <= 59) classification = 'NEUTRAL';\nelse if (riskAppetiteScore <= 79) classification = 'RISK ON';\nelse classification = 'RISK ON EUFORIA';\n\n// Generate interpretation\nlet lectura;\nif (riskAppetiteScore <= 20) {\n  lectura = 'Miedo extremo en los mercados. Posible sobreventa. Buscar oportunidades de compra en activos de riesgo.';\n} else if (riskAppetiteScore <= 40) {\n  lectura = 'Sesgo defensivo presente. Reducir exposición a riesgo, priorizar activos de bajo volatilidad.';\n} else if (riskAppetiteScore <= 59) {\n  lectura = 'Mercados en modo espera. Sin dirección clara. Mantener exposición neutral con gestión activa del tamaño.';\n} else if (riskAppetiteScore <= 79) {\n  lectura = 'Apetito por riesgo activo. Favorecer activos de mayor beta y trend following.';\n} else {\n  lectura = 'Euforia en los mercados. Extrema cautela con nuevos entries. Posible reversiónmedia inminente.';\n}\n\n// Build summary\nconst summary = `SENTIMENT SNAPSHOT — ${fecha} ${hora}\nRisk Appetite: ${riskAppetiteScore}/100 — ${classification}\n• CNN Fear & Greed: ${cnnScore} (${cnnRating}) ${cnnChangeYday >= 0 ? '+' : ''}${cnnChangeYday} vs ayer\n• Crypto Fear & Greed: ${cryptoScore} (${cryptoRating}) ${cryptoChangeYday >= 0 ? '+' : ''}${cryptoChangeYday} vs ayer\n• VIX: ${vixClose} (level: ${vixLevel}, ${vixChange5d >= 0 ? '+' : ''}${vixChange5d} 5d)\n• DXY: ${dxyPrice} (${dxyChangeWeek >= 0 ? '+' : ''}${dxyChangeWeek}% semanal, trend: ${dxyTrend})\n• Gold/Oil ratio: ${goldOilRatio} (trend: ${goldOilTrend})\nLECTURA: ${lectura}`;\n\n// Build data objects for storage\nconst sentimentData = {\n  timestamp: now.toISOString(),\n  fecha,\n  hora,\n  riskAppetiteScore,\n  classification,\n  cnnFearGreed: {\n    score: cnnScore,\n    rating: cnnRating,\n    changeVsYesterday: cnnChangeYday,\n    changeVsWeek: cnnChangeWeek\n  },\n  cryptoFearGreed: {\n    score: cryptoScore,\n    rating: cryptoRating,\n    changeVsYesterday: cryptoChangeYday\n  },\n  vix: {\n    value: vixClose,\n    change5d: vixChange5d,\n    level: vixLevel\n  },\n  dxy: {\n    value: dxyPrice,\n    changeWeekly: dxyChangeWeek,\n    trend: dxyTrend\n  },\n  goldOilRatio: {\n    value: goldOilRatio,\n    goldPrice,\n    oilPrice,\n    trend: goldOilTrend\n  },\n  lectura\n};\n\nreturn [\n  { json: { action: 'latest_json', data: sentimentData } },\n  { json: { action: 'latest_txt', data: summary } }\n];"
+        "jsCode": "// Sentiment Snapshot - Merge & Calculate Risk Appetite Score\n// Weights: CNN F&G 30%, Crypto F&G inverse 20%, VIX inverted 30%, DXY 20%\n\nconst now = new Date();\nconst madridOffset = 1; // CET (UTC+1), CEST would be 2 but n8n runs in server time\nconst fecha = now.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' });\nconst hora = now.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' });\n\n// Extract CNN Fear & Greed data\nlet cnnScore = 50;\nlet cnnRating = 'Neutral';\nlet cnnChangeYday = 0;\nlet cnnChangeWeek = 0;\n\nif ($input.first().json.fearandgreed) {\n  const fg = $input.first().json.fearandgreed;\n  cnnScore = fg.current?.value ?? 50;\n  cnnRating = fg.current?.rating ?? 'Neutral';\n  cnnChangeYday = fg.current?.previousClose !== undefined && fg.historical?.values?.[1] \n    ? Math.round((fg.current.value - fg.historical.values[1].value) * 10) / 10 \n    : 0;\n  cnnChangeWeek = fg.current?.oneWeekAgo !== undefined \n    ? Math.round((fg.current.value - fg.current.oneWeekAgo) * 10) / 10 \n    : 0;\n}\n\n// Extract Crypto Fear & Greed data\nlet cryptoScore = 50;\nlet cryptoRating = 'Neutral';\nlet cryptoChangeYday = 0;\n\nif ($input.item(1).json.data && $input.item(1).json.data.length >= 2) {\n  const today = $input.item(1).json.data[0];\n  const yesterday = $input.item(1).json.data[1];\n  cryptoScore = parseInt(today.value);\n  cryptoRating = today.value_classification;\n  cryptoChangeYday = cryptoScore - parseInt(yesterday.value);\n}\n\n// Extract VIX data\nlet vixClose = 20;\nlet vixChange5d = 0;\nlet vixLevel = 'medium';\n\nif ($input.item(2).json.chart && $input.item(2).json.chart.result && $input.item(2).json.chart.result[0]) {\n  const result = $input.item(2).json.chart.result[0];\n  const closes = result.indicators.quote[0].close.filter(c => c !== null);\n  if (closes.length > 0) {\n    vixClose = Math.round(closes[closes.length - 1] * 100) / 100;\n    if (closes.length >= 5) {\n      vixChange5d = Math.round((closes[closes.length - 1] - closes[closes.length - 5]) * 100) / 100;\n    }\n  }\n  if (vixClose < 15) vixLevel = 'low';\n  else if (vixClose <= 25) vixLevel = 'medium';\n  else vixLevel = 'high';\n}\n\n// Extract DXY data\nlet dxyPrice = 100;\nlet dxyChangeWeek = 0;\nlet dxyTrend = 'flat';\n\nif ($input.item(3).json.chart && $input.item(3).json.chart.result && $input.item(3).json.chart.result[0]) {\n  const result = $input.item(3).json.chart.result[0];\n  const closes = result.indicators.quote[0].close.filter(c => c !== null);\n  if (closes.length >= 2) {\n    dxyPrice = Math.round(closes[closes.length - 1] * 100) / 100;\n    dxyChangeWeek = Math.round(((closes[closes.length - 1] - closes[0]) / closes[0] * 100) * 100) / 100;\n    if (dxyChangeWeek > 0.5) dxyTrend = 'up';\n    else if (dxyChangeWeek < -0.5) dxyTrend = 'down';\n  }\n}\n\n// Extract Gold data\nlet goldPrice = 2000;\nif ($input.item(4).json.chart && $input.item(4).json.chart.result && $input.item(5).json.chart.result[0]) {\n  const goldResult = $input.item(4).json.chart.result[0];\n  const goldCloses = goldResult.indicators.quote[0].close.filter(c => c !== null);\n  if (goldCloses.length > 0) {\n    goldPrice = Math.round(goldCloses[goldCloses.length - 1] * 100) / 100;\n  }\n}\n\n// Extract Oil data and calculate Gold/Oil ratio\nlet oilPrice = 80;\nlet goldOilRatio = 25;\nlet goldOilTrend = 'flat';\n\nif ($input.item(5).json.chart && $input.item(5).json.chart.result && $input.item(5).json.chart.result[0]) {\n  const oilResult = $input.item(5).json.chart.result[0];\n  const oilCloses = oilResult.indicators.quote[0].close.filter(c => c !== null);\n  if (oilCloses.length > 0) {\n    oilPrice = Math.round(oilCloses[oilCloses.length - 1] * 100) / 100;\n    goldOilRatio = Math.round((goldPrice / oilPrice) * 100) / 100;\n    \n    // Calculate trend from first to last week value\n    if (oilCloses.length >= 5) {\n      const goldOilWeekAgo = goldPrice / oilCloses[0];\n      const currentRatio = goldPrice / oilCloses[oilCloses.length - 1];\n      const ratioChange = currentRatio - goldOilWeekAgo;\n      if (ratioChange > 0.5) goldOilTrend = 'up';\n      else if (ratioChange < -0.5) goldOilTrend = 'down';\n    }\n  }\n}\n\n// Calculate Risk Appetite Score (0-100)\n// CNN F&G: 30% weight (direct)\n// Crypto F&G: 20% weight (inverse - crypto leads risk-on)\n// VIX: 30% weight (inverted - high VIX = fear = low score)\n// DXY: 20% weight (inverse - high DXY = risk-off = low score)\n\n// Normalize VIX to 0-100 scale (VIX typically 10-40, with extremes to 80+)\nconst vixNormalized = Math.max(0, Math.min(100, 100 - ((vixClose - 10) / 60 * 100)));\n\n// Normalize DXY to 0-100 scale (DXY typically 95-105)\nconst dxyNormalized = Math.max(0, Math.min(100, 100 - ((dxyPrice - 95) / 15 * 100)));\n\nconst riskAppetiteScore = Math.round(\n  (cnnScore * 0.30) +\n  (cryptoScore * 0.20) +\n  (vixNormalized * 0.30) +\n  (dxyNormalized * 0.20)\n);\n\n// Classification\nlet classification;\nif (riskAppetiteScore <= 20) classification = 'RISK OFF EXTREMO';\nelse if (riskAppetiteScore <= 40) classification = 'RISK OFF';\nelse if (riskAppetiteScore <= 59) classification = 'NEUTRAL';\nelse if (riskAppetiteScore <= 79) classification = 'RISK ON';\nelse classification = 'RISK ON EUFORIA';\n\n// Generate interpretation\nlet lectura;\nif (riskAppetiteScore <= 20) {\n  lectura = 'Miedo extremo en los mercados. Posible sobreventa. Buscar oportunidades de compra en activos de riesgo.';\n} else if (riskAppetiteScore <= 40) {\n  lectura = 'Sesgo defensivo presente. Reducir exposici\u00f3n a riesgo, priorizar activos de bajo volatilidad.';\n} else if (riskAppetiteScore <= 59) {\n  lectura = 'Mercados en modo espera. Sin direcci\u00f3n clara. Mantener exposici\u00f3n neutral con gesti\u00f3n activa del tama\u00f1o.';\n} else if (riskAppetiteScore <= 79) {\n  lectura = 'Apetito por riesgo activo. Favorecer activos de mayor beta y trend following.';\n} else {\n  lectura = 'Euforia en los mercados. Extrema cautela con nuevos entries. Posible reversi\u00f3nmedia inminente.';\n}\n\n// Build summary\nconst summary = `SENTIMENT SNAPSHOT \u2014 ${fecha} ${hora}\nRisk Appetite: ${riskAppetiteScore}/100 \u2014 ${classification}\n\u2022 CNN Fear & Greed: ${cnnScore} (${cnnRating}) ${cnnChangeYday >= 0 ? '+' : ''}${cnnChangeYday} vs ayer\n\u2022 Crypto Fear & Greed: ${cryptoScore} (${cryptoRating}) ${cryptoChangeYday >= 0 ? '+' : ''}${cryptoChangeYday} vs ayer\n\u2022 VIX: ${vixClose} (level: ${vixLevel}, ${vixChange5d >= 0 ? '+' : ''}${vixChange5d} 5d)\n\u2022 DXY: ${dxyPrice} (${dxyChangeWeek >= 0 ? '+' : ''}${dxyChangeWeek}% semanal, trend: ${dxyTrend})\n\u2022 Gold/Oil ratio: ${goldOilRatio} (trend: ${goldOilTrend})\nLECTURA: ${lectura}`;\n\n// Build data objects for storage\nconst sentimentData = {\n  timestamp: now.toISOString(),\n  fecha,\n  hora,\n  riskAppetiteScore,\n  classification,\n  cnnFearGreed: {\n    score: cnnScore,\n    rating: cnnRating,\n    changeVsYesterday: cnnChangeYday,\n    changeVsWeek: cnnChangeWeek\n  },\n  cryptoFearGreed: {\n    score: cryptoScore,\n    rating: cryptoRating,\n    changeVsYesterday: cryptoChangeYday\n  },\n  vix: {\n    value: vixClose,\n    change5d: vixChange5d,\n    level: vixLevel\n  },\n  dxy: {\n    value: dxyPrice,\n    changeWeekly: dxyChangeWeek,\n    trend: dxyTrend\n  },\n  goldOilRatio: {\n    value: goldOilRatio,\n    goldPrice,\n    oilPrice,\n    trend: goldOilTrend\n  },\n  lectura\n};\n\nreturn [\n  { json: { action: 'latest_json', data: sentimentData } },\n  { json: { action: 'latest_txt', data: summary } }\n];"
       },
       "id": "merge-calculate",
       "name": "Merge & Calculate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [580, 400],
+      "position": [
+        580,
+        400
+      ],
       "description": "Merge all sentiment data and calculate Risk Appetite Score (0-100) with classification"
     },
     {
@@ -124,7 +160,10 @@
       "name": "Store JSON",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [820, 280],
+      "position": [
+        820,
+        280
+      ],
       "description": "Store latest sentiment data as JSON for programmatic access"
     },
     {
@@ -137,7 +176,10 @@
       "name": "Store TXT",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [820, 400],
+      "position": [
+        820,
+        400
+      ],
       "description": "Store latest formatted summary as TXT for human readability"
     },
     {
@@ -150,7 +192,10 @@
       "name": "Store History",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [820, 520],
+      "position": [
+        820,
+        520
+      ],
       "description": "Append to sentiment history (last 24h for evolution tracking)"
     },
     {
@@ -163,9 +208,12 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [1060, 400],
+      "position": [
+        1060,
+        400
+      ],
       "webhookId": "sentiment_snapshot",
-      "description": "GET /webhook/sentiment — returns current formatted sentiment summary"
+      "description": "GET /webhook/sentiment \u2014 returns current formatted sentiment summary"
     },
     {
       "parameters": {
@@ -175,7 +223,10 @@
       "name": "Update History",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [620, 580],
+      "position": [
+        620,
+        580
+      ],
       "description": "Load existing history, append current reading, keep only last 24h"
     }
   ],

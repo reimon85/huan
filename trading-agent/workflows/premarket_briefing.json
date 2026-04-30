@@ -17,10 +17,13 @@
         "options": {}
       },
       "id": "trigger-cron-premarket",
-      "name": "Trigger — 06:30 Cron",
+      "name": "Trigger \u2014 06:30 Cron",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
@@ -31,13 +34,18 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-calendar",
       "name": "Fetch Economic Calendar",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 100]
+      "position": [
+        380,
+        100
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
@@ -48,13 +56,18 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-news",
       "name": "Fetch Latest News",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 250]
+      "position": [
+        380,
+        250
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
@@ -65,13 +78,18 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-cot",
       "name": "Fetch COT Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 400]
+      "position": [
+        380,
+        400
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
@@ -82,13 +100,18 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-sentiment",
       "name": "Fetch Sentiment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 550]
+      "position": [
+        380,
+        550
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
@@ -101,7 +124,10 @@
       "name": "Read Trader Profile",
       "type": "n8n-nodes-base.readBinaryFile",
       "typeVersion": 1.1,
-      "position": [380, 700]
+      "position": [
+        380,
+        700
+      ]
     },
     {
       "parameters": {
@@ -114,7 +140,10 @@
       "name": "Read Last Session",
       "type": "n8n-nodes-base.readBinaryFile",
       "typeVersion": 1.1,
-      "position": [380, 850]
+      "position": [
+        380,
+        850
+      ]
     },
     {
       "parameters": {
@@ -125,13 +154,18 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-prices",
       "name": "Fetch Prices Snapshot",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 1000]
+      "position": [
+        380,
+        1000
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
@@ -142,13 +176,18 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-prices-alerts",
       "name": "Fetch Prices Alerts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 1150]
+      "position": [
+        380,
+        1150
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
@@ -159,28 +198,35 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "fetch-crypto",
       "name": "Fetch Crypto Snapshot",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [380, 1300]
+      "position": [
+        380,
+        1300
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
-        "jsCode": "// Merge all context data into a single context string\nconst today = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\n\nconst calendarData = $input.item(0).json;\nconst newsData = $input.item(1).json;\nconst cotData = $input.item(2).json;\nconst sentimentData = $input.item(3).json;\nconst traderProfile = $input.item(4).json;\nconst lastSession = $input.item(5).json;\nconst pricesSnapshot = $input.item(6).json;\nconst pricesAlerts = $input.item(7).json;\nconst cryptoSnapshot = $input.item(8).json;\n\nconst calendarStr = calendarData ? JSON.stringify(calendarData, null, 2) : 'No hay datos económicos disponibles.';\nconst newsStr = newsData ? JSON.stringify(newsData, null, 2) : 'No hay noticias disponibles.';\nconst cotStr = cotData ? JSON.stringify(cotData, null, 2) : 'No hay datos COT disponibles.';\nconst sentimentStr = sentimentData ? JSON.stringify(sentimentData, null, 2) : 'No hay datos de sentiment disponibles.';\nconst profileStr = traderProfile && traderProfile.data ? traderProfile.data : 'Perfil del trader no disponible.';\nconst sessionStr = lastSession && lastSession.data ? lastSession.data : 'No hay datos de sesión anterior.';\nconst pricesStr = pricesSnapshot ? JSON.stringify(pricesSnapshot, null, 2) : 'No hay datos de precios disponibles.';\nconst alertsStr = pricesAlerts ? JSON.stringify(pricesAlerts, null, 2) : 'No hay alertas de precio activas.';\nconst cryptoStr = cryptoSnapshot ? JSON.stringify(cryptoSnapshot, null, 2) : 'No hay datos de crypto disponibles.';\n\nconst contextString = `=== CONTEXTO DE MERCADO — ${today} ===\n\n## CALENDARIO ECONÓMICO\n${calendarStr}\n\n## ÚLTIMAS 12H NOTICIAS\n${newsStr}\n\n## RESUMEN COT\n${cotStr}\n\n## SNAPSHOT SENTIMENT\n${sentimentStr}\n\n=== PERFIL DEL TRADER ===\n${profileStr}\n\n=== ÚLTIMA SESIÓN ===\n${sessionStr}\n\n=== PRECIOS DE MERCADO (15min delay) ===\n${pricesStr}\n\nALERTAS DE PRECIO ACTIVAS:\n${alertsStr}\n\n=== MERCADO CRYPTO ===\n${cryptoStr}`;\nreturn { json: { context: contextString, date: today } };"
+        "jsCode": "// Merge all context data into a single context string\nconst today = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\n\nconst calendarData = $input.item(0).json;\nconst newsData = $input.item(1).json;\nconst cotData = $input.item(2).json;\nconst sentimentData = $input.item(3).json;\nconst traderProfile = $input.item(4).json;\nconst lastSession = $input.item(5).json;\nconst pricesSnapshot = $input.item(6).json;\nconst pricesAlerts = $input.item(7).json;\nconst cryptoSnapshot = $input.item(8).json;\n\nconst calendarStr = calendarData ? JSON.stringify(calendarData, null, 2) : 'No hay datos econ\u00f3micos disponibles.';\nconst newsStr = newsData ? JSON.stringify(newsData, null, 2) : 'No hay noticias disponibles.';\nconst cotStr = cotData ? JSON.stringify(cotData, null, 2) : 'No hay datos COT disponibles.';\nconst sentimentStr = sentimentData ? JSON.stringify(sentimentData, null, 2) : 'No hay datos de sentiment disponibles.';\nconst profileStr = traderProfile && traderProfile.data ? traderProfile.data : 'Perfil del trader no disponible.';\nconst sessionStr = lastSession && lastSession.data ? lastSession.data : 'No hay datos de sesi\u00f3n anterior.';\nconst pricesStr = pricesSnapshot ? JSON.stringify(pricesSnapshot, null, 2) : 'No hay datos de precios disponibles.';\nconst alertsStr = pricesAlerts ? JSON.stringify(pricesAlerts, null, 2) : 'No hay alertas de precio activas.';\nconst cryptoStr = cryptoSnapshot ? JSON.stringify(cryptoSnapshot, null, 2) : 'No hay datos de crypto disponibles.';\n\nconst contextString = `=== CONTEXTO DE MERCADO \u2014 ${today} ===\n\n## CALENDARIO ECON\u00d3MICO\n${calendarStr}\n\n## \u00daLTIMAS 12H NOTICIAS\n${newsStr}\n\n## RESUMEN COT\n${cotStr}\n\n## SNAPSHOT SENTIMENT\n${sentimentStr}\n\n=== PERFIL DEL TRADER ===\n${profileStr}\n\n=== \u00daLTIMA SESI\u00d3N ===\n${sessionStr}\n\n=== PRECIOS DE MERCADO (15min delay) ===\n${pricesStr}\n\nALERTAS DE PRECIO ACTIVAS:\n${alertsStr}\n\n=== MERCADO CRYPTO ===\n${cryptoStr}`;\nreturn { json: { context: contextString, date: today } };"
       },
       "id": "merge-context",
       "name": "Merge Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 400]
+      "position": [
+        660,
+        400
+      ]
     },
     {
       "parameters": {
         "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
         "sendHeaders": true,
@@ -213,11 +259,11 @@
             },
             {
               "name": "system",
-              "value": "Eres el Maestro Trader, un asistente de IA especializado en análisis de mercados financieros y trading discrecional.\n\nTu función es generar briefings pre-mercado completos y accionables para traders personales.\n\nREGLAS FUNDAMENTALES:\n1. Sé conciso pero completo — cada sección debe tener información útil\n2. Usa datos concretos: niveles de precio, tiempos, porcentajes\n3. Prioriza por impacto en los mercados que opera el usuario (Forex, Futuros ES/NQ/CL/GC, Crypto, Commodities)\n4. Cuando haya incertidumbre, presenta escenarios múltiples\n5. NUNCA des consejos de inversión, solo información y análisis\n6. Siempre incluye disclaimer de que es información educativa\n\nFORMATO DEL BRIEFING:\n\n# BRIEFING PRE-MERCADO — {fecha}\n## 1. RESUMEN MACRO\n- 3-5 puntos sobre qué está moviendo los mercados hoy\n- Contextualiza con datos macro relevantes\n\n## 2. EVENTOS CLAVE DEL DÍA\n- Lista cronológica con hora (Europe/Madrid)\n- Impacto esperado en cada mercado\n- Qué vigilar en cada evento\n\n## 3. LECTURAS DE SENTIMENT\n- Posicionamiento neto de players mayoristas\n- Indicadores de sentiment relevantes\n- Qué dice el posicionamiento sobre directional bias\n\n## 4. MERCADOS A VIGILAR\n- Para cada mercado relevante hoy:\n  - Rango esperado / niveles clave\n  - Sesgo direccional\n  - Catalizadores\n  - Incluye análisis específico de crypto si el régimen crypto es relevante para el contexto macro del día (correlación con risk appetite, DXY, etc.)\n\n## 5. SESGOS Y RIESGOS\n- Narrativas dominantes\n- Riesgos potenciales\n- Qué podría sorprender al mercado\n\n## 6. CHECKLIST PRE-SESIÓN\n- 3-5 puntos de atención para hoy\n- Acciones concretas antes de la apertura\n\n---\n*Este briefing es información educativa, no consejo de inversión. Trading involves substantial risk of loss.*"
+              "value": "Eres el Maestro Trader, un asistente de IA especializado en an\u00e1lisis de mercados financieros y trading discrecional.\n\nTu funci\u00f3n es generar briefings pre-mercado completos y accionables para traders personales.\n\nREGLAS FUNDAMENTALES:\n1. S\u00e9 conciso pero completo \u2014 cada secci\u00f3n debe tener informaci\u00f3n \u00fatil\n2. Usa datos concretos: niveles de precio, tiempos, porcentajes\n3. Prioriza por impacto en los mercados que opera el usuario (Forex, Futuros ES/NQ/CL/GC, Crypto, Commodities)\n4. Cuando haya incertidumbre, presenta escenarios m\u00faltiples\n5. NUNCA des consejos de inversi\u00f3n, solo informaci\u00f3n y an\u00e1lisis\n6. Siempre incluye disclaimer de que es informaci\u00f3n educativa\n\nFORMATO DEL BRIEFING:\n\n# BRIEFING PRE-MERCADO \u2014 {fecha}\n## 1. RESUMEN MACRO\n- 3-5 puntos sobre qu\u00e9 est\u00e1 moviendo los mercados hoy\n- Contextualiza con datos macro relevantes\n\n## 2. EVENTOS CLAVE DEL D\u00cdA\n- Lista cronol\u00f3gica con hora (Europe/Madrid)\n- Impacto esperado en cada mercado\n- Qu\u00e9 vigilar en cada evento\n\n## 3. LECTURAS DE SENTIMENT\n- Posicionamiento neto de players mayoristas\n- Indicadores de sentiment relevantes\n- Qu\u00e9 dice el posicionamiento sobre directional bias\n\n## 4. MERCADOS A VIGILAR\n- Para cada mercado relevante hoy:\n  - Rango esperado / niveles clave\n  - Sesgo direccional\n  - Catalizadores\n  - Incluye an\u00e1lisis espec\u00edfico de crypto si el r\u00e9gimen crypto es relevante para el contexto macro del d\u00eda (correlaci\u00f3n con risk appetite, DXY, etc.)\n\n## 5. SESGOS Y RIESGOS\n- Narrativas dominantes\n- Riesgos potenciales\n- Qu\u00e9 podr\u00eda sorprender al mercado\n\n## 6. CHECKLIST PRE-SESI\u00d3N\n- 3-5 puntos de atenci\u00f3n para hoy\n- Acciones concretas antes de la apertura\n\n---\n*Este briefing es informaci\u00f3n educativa, no consejo de inversi\u00f3n. Trading involves substantial risk of loss.*"
             },
             {
               "name": "messages",
-              "value": "[{\"role\": \"user\", \"content\": \"Genera el briefing de pre-mercado para hoy basándote en este contexto:\\n\\n{{ $json.context }}\"}]"
+              "value": "[{\"role\": \"user\", \"content\": \"Genera el briefing de pre-mercado para hoy bas\u00e1ndote en este contexto:\\n\\n{{ $json.context }}\"}]"
             }
           ]
         },
@@ -227,23 +273,31 @@
               "responseFormat": "json"
             }
           }
-        }
+        },
+        "authentication": "none"
       },
       "id": "llm-call",
-      "name": "LLM — Generate Briefing",
+      "name": "LLM \u2014 Generate Briefing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [940, 400]
+      "position": [
+        940,
+        400
+      ],
+      "credentials": {}
     },
     {
       "parameters": {
-        "jsCode": "// Parse LLM response and format with header/footer\nconst llmResponse = $input.first().json;\nconst today = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\nconst now = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });\n\nlet responseText = '';\n\nif (llmResponse.content && Array.isArray(llmResponse.content)) {\n  responseText = llmResponse.content[0].text;\n} else if (llmResponse.text) {\n  responseText = llmResponse.text;\n} else if (typeof llmResponse === 'string') {\n  responseText = llmResponse;\n} else {\n  responseText = JSON.stringify(llmResponse, null, 2);\n}\n\nconst disclaimer = `---\n*Generado: ${today} ${now} | Este briefing es información educativa, no consejo de inversión. Trading involves substantial risk of loss.*\n`;\n\nconst formattedBriefing = `# BRIEFING PRE-MERCADO — ${today}\\n\\n${responseText}\\n\\n${disclaimer}`;\n\n\nreturn {\n  json: {\n    briefing: formattedBriefing,\n    raw_response: responseText,\n    date: today,\n    generated_at: now\n  }\n};"
+        "jsCode": "// Parse LLM response and format with header/footer\nconst llmResponse = $input.first().json;\nconst today = new Date().toLocaleDateString('es-ES', { \n  weekday: 'long', \n  year: 'numeric', \n  month: 'long', \n  day: 'numeric' \n});\nconst now = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });\n\nlet responseText = '';\n\nif (llmResponse.content && Array.isArray(llmResponse.content)) {\n  responseText = llmResponse.content[0].text;\n} else if (llmResponse.text) {\n  responseText = llmResponse.text;\n} else if (typeof llmResponse === 'string') {\n  responseText = llmResponse;\n} else {\n  responseText = JSON.stringify(llmResponse, null, 2);\n}\n\nconst disclaimer = `---\n*Generado: ${today} ${now} | Este briefing es informaci\u00f3n educativa, no consejo de inversi\u00f3n. Trading involves substantial risk of loss.*\n`;\n\nconst formattedBriefing = `# BRIEFING PRE-MERCADO \u2014 ${today}\\n\\n${responseText}\\n\\n${disclaimer}`;\n\n\nreturn {\n  json: {\n    briefing: formattedBriefing,\n    raw_response: responseText,\n    date: today,\n    generated_at: now\n  }\n};"
       },
       "id": "parse-response",
       "name": "Parse Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1220, 400]
+      "position": [
+        1220,
+        400
+      ]
     },
     {
       "parameters": {
@@ -257,7 +311,10 @@
       "name": "Store Briefing (Session)",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1.1,
-      "position": [1500, 250]
+      "position": [
+        1500,
+        250
+      ]
     },
     {
       "parameters": {
@@ -271,7 +328,10 @@
       "name": "Store Briefing (Cache)",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1.1,
-      "position": [1500, 450]
+      "position": [
+        1500,
+        450
+      ]
     },
     {
       "parameters": {
@@ -279,16 +339,18 @@
         "options": {}
       },
       "id": "webhook-briefing",
-      "name": "Webhook — Briefing Today",
+      "name": "Webhook \u2014 Briefing Today",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [1500, 650],
+      "position": [
+        1500,
+        650
+      ],
       "webhookId": "briefing-today"
     },
     {
       "parameters": {
         "url": "={{ $env.TELEGRAM_BOT_URL }}",
-        "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
         "sendHeaders": true,
@@ -317,17 +379,22 @@
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "authentication": "none"
       },
       "id": "notify-telegram",
       "name": "Notify Telegram (Optional)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1500, 850]
+      "position": [
+        1500,
+        850
+      ],
+      "credentials": {}
     }
   ],
   "connections": {
-    "Trigger — 06:30 Cron": {
+    "Trigger \u2014 06:30 Cron": {
       "main": [
         [
           {
@@ -481,14 +548,14 @@
       "main": [
         [
           {
-            "node": "LLM — Generate Briefing",
+            "node": "LLM \u2014 Generate Briefing",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "LLM — Generate Briefing": {
+    "LLM \u2014 Generate Briefing": {
       "main": [
         [
           {
@@ -513,7 +580,7 @@
             "index": 0
           },
           {
-            "node": "Webhook — Briefing Today",
+            "node": "Webhook \u2014 Briefing Today",
             "type": "main",
             "index": 0
           },

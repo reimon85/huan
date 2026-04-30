@@ -116,7 +116,7 @@ Escenario B (30%): El gap se cierra parcialmente.
 - Razón: Diplomacia internacional contiene la escalada.
 - Condición: Llamadas de Biden-Netanyahu reducen tensión.
 
-Invalidación: CL rompe 82.00 con volumen vendedor fuerte — 
+Invalidación: CL rompe 82.00 con volumen vendedor fuerte —
 el mercado no cree en escalada sostenida.
 ```
 

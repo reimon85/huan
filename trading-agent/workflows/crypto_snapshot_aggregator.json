@@ -5,11 +5,17 @@
       "id": "trigger-cron",
       "name": "Cron Trigger",
       "type": "n8n-nodes-base.cron",
-      "position": [100, 300],
+      "position": [
+        100,
+        300
+      ],
       "parameters": {
         "rule": {
           "interval": [
-            { "field": "minutes", "minutes": 30 }
+            {
+              "field": "minutes",
+              "minutes": 30
+            }
           ]
         }
       },
@@ -19,7 +25,10 @@
       "id": "trigger-webhook",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
-      "position": [100, 500],
+      "position": [
+        100,
+        500
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "crypto-snapshot-aggregator",
@@ -32,13 +41,17 @@
       "id": "fetch-parallel",
       "name": "Fetch All Sources",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [400, 300],
+      "position": [
+        400,
+        300
+      ],
       "parameters": {
         "method": "GET",
         "url": "={{$json.webhookUrl}}",
         "options": {
           "timeout": 15000
-        }
+        },
+        "authentication": "none"
       },
       "note": "Placeholder - duplicate this node for each of 5 endpoints",
       "subNodes": [
@@ -92,15 +105,19 @@
           },
           "continueOnFail": true
         }
-      ]
+      ],
+      "credentials": {}
     },
     {
       "id": "synthesize",
       "name": "Synthesize Regime",
       "type": "n8n-nodes-base.code",
-      "position": [700, 300],
+      "position": [
+        700,
+        300
+      ],
       "parameters": {
-        "jsCode": "// Synthesize crypto market regime from all fetched data\n\nconst funding = $('Fetch Funding').first().json;\nconst oi = $('Fetch Open Interest').first().json;\nconst liquidations = $('Fetch Liquidations').first().json;\nconst globalData = $('Fetch Global Data').first().json;\nconst prices = $('Fetch Prices').first().json;\n\nconst fundingBtc = funding?.btc ?? 0;\nconst fundingEth = funding?.eth ?? 0;\nconst oiBtcChange = oi?.btc?.change_1h ?? 0;\nconst oiEthChange = oi?.eth?.change_1h ?? 0;\nconst longLiq = liquidations?.longs_4h ?? 0;\nconst shortLiq = liquidations?.shorts_4h ?? 0;\nconst btcDom = globalData?.btc_dominance ?? 0;\nconst ethDom = globalData?.eth_dominance ?? 0;\n\nconst avgFunding = (fundingBtc + fundingEth) / 2;\nconst avgOiChange = (oiBtcChange + oiEthChange) / 2;\n\nconst keySignals = [];\nlet regime = 'NEUTRAL';\nlet confidence = 'baja';\nlet narrative = '';\n\n// Regime logic\nif (avgFunding > 0.05 && avgOiChange > 3 && oiBtcChange > 0) {\n  regime = 'BULLISH_MOMENTUM';\n  confidence = avgFunding > 0.10 ? 'alta' : 'media';\n  keySignals.push(`Funding BTC ${fundingBtc.toFixed(2)}%`, `OI BTC +${oiBtcChange.toFixed(1)}%`);\n  narrative = `Funding positivo elevado en BTC/ETH sugiere momentum bullish. OI subiendo confirma entrada de capital. `;\n} else if (avgFunding > 0.05 && avgOiChange < 0) {\n  regime = 'OVERHEATED_CORRECTION';\n  confidence = 'media';\n  keySignals.push(`Funding ETH ${fundingEth.toFixed(2)}%`, `OI ETH ${oiEthChange.toFixed(1)}%`);\n  narrative = `Funding positivo alto con OI decreciendo indica mercado sobrecalentado. Probable corrección inminente. `;\n} else if (longLiq > shortLiq * 1.5 && avgFunding < 0) {\n  regime = 'PANIC';\n  confidence = 'alta';\n  keySignals.push(`Longs liq ${longLiq}M`, `Funding negativo ${avgFunding.toFixed(2)}%`);\n  narrative = `Liquidaciones de longs masivas con funding negativo indica pánico. Posible capitulación. `;\n} else if (avgFunding < -0.03 && avgOiChange > 2) {\n  regime = 'SHORT_SQUEEZE_POTENTIAL';\n  confidence = 'media';\n  keySignals.push(`Funding negativo ${avgFunding.toFixed(2)}%`, `OI subiendo`);\n  narrative = `Funding negativo con OI subiendo sugiere potencial short squeeze. `;\n} else if (avgFunding < 0 && avgOiChange < 0) {\n  regime = 'ACCUMULATION';\n  confidence = 'media';\n  narrative = `Funding negativo y OI decreciendo sugiere acumulación en rango. `;\n} else {\n  regime = 'NEUTRAL';\n  confidence = 'baja';\n  narrative = `Mercado en equilibrio. Sin señal clara de dirección. `;\n}\n\n// Enrich with prices\nif (prices?.BTC) keySignals.push(`BTC $${prices.BTC.toLocaleString()}`);\nif (prices?.ETH) keySignals.push(`ETH $${prices.ETH.toLocaleString()}`);\n\nreturn {\n  regime,\n  confidence,\n  key_signals: keySignals,\n  narrative: narrative + `BTC Dom: ${btcDom.toFixed(1)}% | ETH Dom: ${ethDom.toFixed(1)}%.`,\n  raw: { funding, oi, liquidations, globalData, prices }\n};"
+        "jsCode": "// Synthesize crypto market regime from all fetched data\n\nconst funding = $('Fetch Funding').first().json;\nconst oi = $('Fetch Open Interest').first().json;\nconst liquidations = $('Fetch Liquidations').first().json;\nconst globalData = $('Fetch Global Data').first().json;\nconst prices = $('Fetch Prices').first().json;\n\nconst fundingBtc = funding?.btc ?? 0;\nconst fundingEth = funding?.eth ?? 0;\nconst oiBtcChange = oi?.btc?.change_1h ?? 0;\nconst oiEthChange = oi?.eth?.change_1h ?? 0;\nconst longLiq = liquidations?.longs_4h ?? 0;\nconst shortLiq = liquidations?.shorts_4h ?? 0;\nconst btcDom = globalData?.btc_dominance ?? 0;\nconst ethDom = globalData?.eth_dominance ?? 0;\n\nconst avgFunding = (fundingBtc + fundingEth) / 2;\nconst avgOiChange = (oiBtcChange + oiEthChange) / 2;\n\nconst keySignals = [];\nlet regime = 'NEUTRAL';\nlet confidence = 'baja';\nlet narrative = '';\n\n// Regime logic\nif (avgFunding > 0.05 && avgOiChange > 3 && oiBtcChange > 0) {\n  regime = 'BULLISH_MOMENTUM';\n  confidence = avgFunding > 0.10 ? 'alta' : 'media';\n  keySignals.push(`Funding BTC ${fundingBtc.toFixed(2)}%`, `OI BTC +${oiBtcChange.toFixed(1)}%`);\n  narrative = `Funding positivo elevado en BTC/ETH sugiere momentum bullish. OI subiendo confirma entrada de capital. `;\n} else if (avgFunding > 0.05 && avgOiChange < 0) {\n  regime = 'OVERHEATED_CORRECTION';\n  confidence = 'media';\n  keySignals.push(`Funding ETH ${fundingEth.toFixed(2)}%`, `OI ETH ${oiEthChange.toFixed(1)}%`);\n  narrative = `Funding positivo alto con OI decreciendo indica mercado sobrecalentado. Probable correcci\u00f3n inminente. `;\n} else if (longLiq > shortLiq * 1.5 && avgFunding < 0) {\n  regime = 'PANIC';\n  confidence = 'alta';\n  keySignals.push(`Longs liq ${longLiq}M`, `Funding negativo ${avgFunding.toFixed(2)}%`);\n  narrative = `Liquidaciones de longs masivas con funding negativo indica p\u00e1nico. Posible capitulaci\u00f3n. `;\n} else if (avgFunding < -0.03 && avgOiChange > 2) {\n  regime = 'SHORT_SQUEEZE_POTENTIAL';\n  confidence = 'media';\n  keySignals.push(`Funding negativo ${avgFunding.toFixed(2)}%`, `OI subiendo`);\n  narrative = `Funding negativo con OI subiendo sugiere potencial short squeeze. `;\n} else if (avgFunding < 0 && avgOiChange < 0) {\n  regime = 'ACCUMULATION';\n  confidence = 'media';\n  narrative = `Funding negativo y OI decreciendo sugiere acumulaci\u00f3n en rango. `;\n} else {\n  regime = 'NEUTRAL';\n  confidence = 'baja';\n  narrative = `Mercado en equilibrio. Sin se\u00f1al clara de direcci\u00f3n. `;\n}\n\n// Enrich with prices\nif (prices?.BTC) keySignals.push(`BTC $${prices.BTC.toLocaleString()}`);\nif (prices?.ETH) keySignals.push(`ETH $${prices.ETH.toLocaleString()}`);\n\nreturn {\n  regime,\n  confidence,\n  key_signals: keySignals,\n  narrative: narrative + `BTC Dom: ${btcDom.toFixed(1)}% | ETH Dom: ${ethDom.toFixed(1)}%.`,\n  raw: { funding, oi, liquidations, globalData, prices }\n};"
       },
       "notes": "Analyzes all market data to determine current regime"
     },
@@ -108,16 +125,22 @@
       "id": "format-snapshot",
       "name": "Format Full Snapshot",
       "type": "n8n-nodes-base.code",
-      "position": [1000, 200],
+      "position": [
+        1000,
+        200
+      ],
       "parameters": {
-        "jsCode": "// Format complete crypto market snapshot\n\nconst synth = $input.first().json;\nconst funding = synth.raw?.funding ?? {};\nconst oi = synth.raw?.oi ?? {};\nconst liquidations = synth.raw?.liquidations ?? {};\nconst globalData = synth.raw?.globalData ?? {};\nconst prices = synth.raw?.prices ?? {};\n\nconst now = new Date();\nconst fecha = now.toISOString().split('T')[0];\nconst hora = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });\n\n// Format funding rates table\nconst fundingLines = ['=== FUNDING RATES ==='];\nif (funding.byAsset) {\n  for (const [asset, data] of Object.entries(funding.byAsset)) {\n    const bins = data.binance ? `Binance ${data.binance.toFixed(2)}%` : '';\n    const bybt = data.bybit ? `Bybit ${data.bybit.toFixed(2)}%` : '';\n    const okx = data.okx ? `OKX ${data.okx.toFixed(2)}%` : '';\n    const hl = data.huobi ? `HL ${data.huobi.toFixed(2)}%` : '';\n    fundingLines.push(`${asset}: ${[bins, bybt, okx, hl].filter(Boolean).join(' | ')}`);\n  }\n} else {\n  fundingLines.push(`BTC: Binance ${(funding.btc?.binance ?? 0).toFixed(2)}% | Bybit ${(funding.btc?.bybit ?? 0).toFixed(2)}% | OKX ${(funding.btc?.okx ?? 0).toFixed(2)}%`);\n  fundingLines.push(`ETH: Binance ${(funding.eth?.binance ?? 0).toFixed(2)}% | Bybit ${(funding.eth?.bybit ?? 0).toFixed(2)}% | OKX ${(funding.eth?.okx ?? 0).toFixed(2)}%`);\n}\n\n// Format OI section\nconst oiLines = ['=== OPEN INTEREST & LIQUIDACIONES ==='];\nif (oi.btc) oiLines.push(`BTC OI: $${(oi.btc.usd / 1e9).toFixed(1)}B (${oi.btc.change_1h >= 0 ? '+' : ''}${oi.btc.change_1h.toFixed(1)}% 1h)`);\nif (oi.eth) {\n  const ethWarning = oi.eth.change_1h > 10 ? ' ⚠️' : '';\n  oiLines.push(`ETH OI: $${(oi.eth.usd / 1e9).toFixed(1)}B (${oi.eth.change_1h >= 0 ? '+' : ''}${oi.eth.change_1h.toFixed(1)}% 1h)${ethWarning}`);\n}\n\n// Liquidations\nif (liquidations.longs_4h || liquidations.shorts_4h) {\n  oiLines.push(`Longs liq 4h: $${liquidations.longs_4h}M | Shorts: $${liquidations.shorts_4h}M`);\n}\n\n// Dominance\nconst domLines = ['=== DOMINANCE & GLOBAL ==='];\ndomLines.push(`BTC Dom: ${(globalData.btc_dominance ?? 0).toFixed(1)}% | ETH Dom: ${(globalData.eth_dominance ?? 0).toFixed(1)}%`);\ndomLines.push(`Régimen global: ${synth.regime}`);\n\nconst fullSnapshot = `CRYPTO MARKET SNAPSHOT — ${fecha} ${hora}\nRÉGIMEN ACTUAL: ${synth.regime} (confianza: ${synth.confidence})\n${synth.narrative}\n${fundingLines.join('\\n')}\n${oiLines.join('\\n')}\n${domLines.join('\\n')}`;\n\nconst jsonOutput = {\n  regime: synth.regime,\n  confidence: synth.confidence,\n  key_signals: synth.key_signals,\n  narrative: synth.narrative,\n  timestamp: now.toISOString(),\n  funding_rates: funding,\n  open_interest: oi,\n  liquidations: liquidations,\n  dominance: {\n    btc: globalData.btc_dominance,\n    eth: globalData.eth_dominance\n  },\n  prices: prices,\n  full_text: fullSnapshot\n};\n\nreturn [jsonOutput];"
+        "jsCode": "// Format complete crypto market snapshot\n\nconst synth = $input.first().json;\nconst funding = synth.raw?.funding ?? {};\nconst oi = synth.raw?.oi ?? {};\nconst liquidations = synth.raw?.liquidations ?? {};\nconst globalData = synth.raw?.globalData ?? {};\nconst prices = synth.raw?.prices ?? {};\n\nconst now = new Date();\nconst fecha = now.toISOString().split('T')[0];\nconst hora = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' });\n\n// Format funding rates table\nconst fundingLines = ['=== FUNDING RATES ==='];\nif (funding.byAsset) {\n  for (const [asset, data] of Object.entries(funding.byAsset)) {\n    const bins = data.binance ? `Binance ${data.binance.toFixed(2)}%` : '';\n    const bybt = data.bybit ? `Bybit ${data.bybit.toFixed(2)}%` : '';\n    const okx = data.okx ? `OKX ${data.okx.toFixed(2)}%` : '';\n    const hl = data.huobi ? `HL ${data.huobi.toFixed(2)}%` : '';\n    fundingLines.push(`${asset}: ${[bins, bybt, okx, hl].filter(Boolean).join(' | ')}`);\n  }\n} else {\n  fundingLines.push(`BTC: Binance ${(funding.btc?.binance ?? 0).toFixed(2)}% | Bybit ${(funding.btc?.bybit ?? 0).toFixed(2)}% | OKX ${(funding.btc?.okx ?? 0).toFixed(2)}%`);\n  fundingLines.push(`ETH: Binance ${(funding.eth?.binance ?? 0).toFixed(2)}% | Bybit ${(funding.eth?.bybit ?? 0).toFixed(2)}% | OKX ${(funding.eth?.okx ?? 0).toFixed(2)}%`);\n}\n\n// Format OI section\nconst oiLines = ['=== OPEN INTEREST & LIQUIDACIONES ==='];\nif (oi.btc) oiLines.push(`BTC OI: $${(oi.btc.usd / 1e9).toFixed(1)}B (${oi.btc.change_1h >= 0 ? '+' : ''}${oi.btc.change_1h.toFixed(1)}% 1h)`);\nif (oi.eth) {\n  const ethWarning = oi.eth.change_1h > 10 ? ' \u26a0\ufe0f' : '';\n  oiLines.push(`ETH OI: $${(oi.eth.usd / 1e9).toFixed(1)}B (${oi.eth.change_1h >= 0 ? '+' : ''}${oi.eth.change_1h.toFixed(1)}% 1h)${ethWarning}`);\n}\n\n// Liquidations\nif (liquidations.longs_4h || liquidations.shorts_4h) {\n  oiLines.push(`Longs liq 4h: $${liquidations.longs_4h}M | Shorts: $${liquidations.shorts_4h}M`);\n}\n\n// Dominance\nconst domLines = ['=== DOMINANCE & GLOBAL ==='];\ndomLines.push(`BTC Dom: ${(globalData.btc_dominance ?? 0).toFixed(1)}% | ETH Dom: ${(globalData.eth_dominance ?? 0).toFixed(1)}%`);\ndomLines.push(`R\u00e9gimen global: ${synth.regime}`);\n\nconst fullSnapshot = `CRYPTO MARKET SNAPSHOT \u2014 ${fecha} ${hora}\nR\u00c9GIMEN ACTUAL: ${synth.regime} (confianza: ${synth.confidence})\n${synth.narrative}\n${fundingLines.join('\\n')}\n${oiLines.join('\\n')}\n${domLines.join('\\n')}`;\n\nconst jsonOutput = {\n  regime: synth.regime,\n  confidence: synth.confidence,\n  key_signals: synth.key_signals,\n  narrative: synth.narrative,\n  timestamp: now.toISOString(),\n  funding_rates: funding,\n  open_interest: oi,\n  liquidations: liquidations,\n  dominance: {\n    btc: globalData.btc_dominance,\n    eth: globalData.eth_dominance\n  },\n  prices: prices,\n  full_text: fullSnapshot\n};\n\nreturn [jsonOutput];"
       }
     },
     {
       "id": "store-txt",
       "name": "Store TXT",
       "type": "n8n-nodes-base.writeBinaryFile",
-      "position": [1300, 150],
+      "position": [
+        1300,
+        150
+      ],
       "parameters": {
         "fileName": "/data/cache/crypto_snapshot_latest.txt",
         "dataPropertyName": "data",
@@ -132,7 +155,10 @@
       "id": "store-json",
       "name": "Store JSON",
       "type": "n8n-nodes-base.writeBinaryFile",
-      "position": [1300, 350],
+      "position": [
+        1300,
+        350
+      ],
       "parameters": {
         "fileName": "/data/cache/crypto_snapshot_latest.json",
         "dataPropertyName": "json",
@@ -147,7 +173,10 @@
       "id": "webhook-snapshot",
       "name": "Webhook /crypto-snapshot",
       "type": "n8n-nodes-base.webhook",
-      "position": [1600, 200],
+      "position": [
+        1600,
+        200
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "crypto-snapshot",
@@ -163,7 +192,10 @@
       "id": "webhook-regime",
       "name": "Webhook /crypto-regime",
       "type": "n8n-nodes-base.webhook",
-      "position": [1600, 400],
+      "position": [
+        1600,
+        400
+      ],
       "parameters": {
         "httpMethod": "GET",
         "path": "crypto-regime",
@@ -176,7 +208,10 @@
       "id": "respond-snapshot",
       "name": "Respond Full Snapshot",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1900, 200],
+      "position": [
+        1900,
+        200
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json.full_text }}"
@@ -186,7 +221,10 @@
       "id": "respond-regime",
       "name": "Respond Regime Only",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1900, 400],
+      "position": [
+        1900,
+        400
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ {regime: $json.regime, confidence: $json.confidence, narrative: $json.narrative, key_signals: $json.key_signals} }}"
@@ -196,38 +234,86 @@
   "connections": {
     "Cron Trigger": {
       "main": [
-        [{ "node": "Fetch All Sources", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Fetch All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Webhook Trigger": {
       "main": [
-        [{ "node": "Fetch All Sources", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Fetch All Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Fetch All Sources": {
       "main": [
-        [{ "node": "Synthesize Regime", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Synthesize Regime",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Synthesize Regime": {
       "main": [
-        [{ "node": "Format Full Snapshot", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Format Full Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Format Full Snapshot": {
       "main": [
-        [{ "node": "Store TXT", "type": "main", "index": 0 }],
-        [{ "node": "Store JSON", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Store TXT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Webhook /crypto-snapshot": {
       "main": [
-        [{ "node": "Respond Full Snapshot", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Respond Full Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Webhook /crypto-regime": {
       "main": [
-        [{ "node": "Respond Regime Only", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Respond Regime Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -235,7 +321,12 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": ["crypto", "trading", "snapshot", "aggregator"],
+  "tags": [
+    "crypto",
+    "trading",
+    "snapshot",
+    "aggregator"
+  ],
   "triggerCount": 2,
   "versionId": "1.0.0"
 }
