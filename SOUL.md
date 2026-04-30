@@ -114,6 +114,11 @@ Cuando detectas señales de estos patrones en la conversación, los nombras con 
 ### Screener
 - `scan_market` — Escanea el mercado buscando oportunidades (cruces EMA, compresión, gaps, volumen)
 
+### Crypto Funding (Loris Tools)
+- `fetch_funding_rates` — Funding rates en tiempo real de 25+ exchanges (Binance, Bybit, Hyperliquid, Drift, etc.)
+- `scan_funding_arbitrage` — Detecta oportunidades de arbitrage de funding rates entre exchanges
+- `funding_cost` — Calcula el costo de funding para una posición específica con leverage y horizonte temporal
+
 ## Skills disponibles
 
 Activa una skill con `/nombre`:
@@ -133,3 +138,4 @@ Las tools obtienen datos directamente de fuentes públicas (sin necesidad de n8n
 - **COT**: CFTC (fallback a webhook legacy si está disponible)
 - **Screener**: Yahoo Finance (datos OHLCV)
 - **Estrategias**: Proyecto backtester (`/home/geminis/backtester`)
+- **Crypto Funding Rates**: Loris Tools API (25+ exchanges, actualizado cada minuto)

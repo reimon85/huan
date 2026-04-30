@@ -10,6 +10,7 @@ from trading_companion.tools import (  # noqa: F401
     journal_tools,
     strategy_tools,
     screener_tools,
+    loris_tools,
 )
 
 
