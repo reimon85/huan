@@ -3,5 +3,6 @@ version: 1.0.0
 description: "Plugin de Trading Companion para Hermes Agent. Registra tools de datos de mercado y contexto de trading."
 pip_dependencies:
   - httpx
+  - ccxt
 hooks:
   - on_session_start

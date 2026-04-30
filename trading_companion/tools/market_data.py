@@ -502,3 +502,813 @@ registry.register(
     emoji="🪙",
     max_result_size_chars=100_000,
 )
+
+
+# =============================================================================
+# Binance Crypto — ccxt (individual price queries)
+# =============================================================================
+
+import math
+import json as _json
+
+
+def _format_number(n: float, decimals: int = 4) -> str:
+    """Format number with appropriate precision."""
+    if n is None or (isinstance(n, float) and math.isnan(n)):
+        return "N/A"
+    if abs(n) >= 1000:
+        return f"{n:,.2f}"
+    if abs(n) >= 1:
+        return f"{n:.{decimals}f}"
+    if abs(n) >= 0.0001:
+        return f"{n:.{max(decimals, 6)}f}"
+    return f"{n:.8f}"
+
+
+def _get_binance():
+    """Create Binance exchange instance (public, no auth)."""
+    import ccxt
+    return ccxt.binance()
+
+
+def _handle_get_crypto_price(args: dict, **kwargs) -> str:
+    """Get current price and 24h stats for a crypto asset via Binance."""
+    symbol = args.get("symbol", "").strip().upper()
+    if not symbol:
+        return '{"error": "Symbol is required"}'
+
+    # Normalize: BTC -> BTC/USDT, ETH -> ETH/USDT, etc.
+    if "/" not in symbol:
+        symbol = f"{symbol}/USDT"
+
+    try:
+        exchange = _get_binance()
+        ticker = exchange.fetch_ticker(symbol)
+
+        # Funding rate (futures only)
+        funding_rate = None
+        try:
+            funding = exchange.fetch_funding_rate(symbol)
+            funding_rate = funding.get("fundingRate")
+        except Exception:
+            pass
+
+        # Order book spread
+        try:
+            ob = exchange.fetch_order_book(symbol, limit=1)
+            bid = ob.get("bids", [[None]])[0][0]
+            ask = ob.get("asks", [[None]])[0][0]
+            spread = (ask - bid) / bid * 100 if bid and ask else None
+        except Exception:
+            bid = ask = spread = None
+
+        result = {
+            "exchange": "Binance",
+            "symbol": symbol,
+            "price": ticker.get("last"),
+            "price_formatted": _format_number(ticker.get("last")),
+            "bid": bid,
+            "ask": ask,
+            "spread_pct": round(spread, 4) if spread else None,
+            "change_24h": ticker.get("change"),
+            "change_pct_24h": ticker.get("percentage"),
+            "volume_24h": ticker.get("quoteVolume"),
+            "high_24h": ticker.get("high"),
+            "low_24h": ticker.get("low"),
+            "timestamp": ticker.get("timestamp"),
+            "funding_rate": funding_rate,
+        }
+        return _json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        return _json.dumps({"error": str(e), "symbol": symbol})
+
+
+def _handle_get_crypto_prices(args: dict, **kwargs) -> str:
+    """Get prices for multiple crypto assets at once."""
+    symbols = args.get("symbols", [])
+    if not symbols:
+        return '{"error": "No symbols provided"}'
+
+    results = []
+    for sym in symbols:
+        raw = _handle_get_crypto_price({"symbol": sym}, **kwargs)
+        try:
+            data = _json.loads(raw)
+            if "error" not in data:
+                results.append(data)
+        except Exception:
+            results.append({"symbol": sym, "error": "Parse error"})
+
+    return _json.dumps(results, ensure_ascii=False)
+
+
+def _check_ccxt_available() -> bool:
+    try:
+        import ccxt
+        return True
+    except ImportError:
+        return False
+
+
+_CRYPTO_PRICE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_crypto_price",
+        "description": (
+            "Get current price and 24h statistics for a cryptocurrency via Binance. "
+            "Auto-resolves symbol (BTC -> BTC/USDT). Returns: last price, bid/ask, "
+            "spread, 24h change %, volume, high/low, funding rate (futures). "
+            "No API key required."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Crypto symbol (e.g. 'BTC', 'ETH', 'SOL'). Case-insensitive.",
+                },
+            },
+            "required": ["symbol"],
+        },
+    },
+}
+
+_CRYPTO_PRICES_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_crypto_prices",
+        "description": (
+            "Get current prices for multiple cryptocurrencies at once via Binance. "
+            "More efficient than calling get_crypto_price multiple times."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbols": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of crypto symbols (e.g. ['BTC', 'ETH', 'SOL'])",
+                },
+            },
+            "required": ["symbols"],
+        },
+    },
+}
+
+
+registry.register(
+    name="get_crypto_price",
+    toolset="trading",
+    schema=_CRYPTO_PRICE_SCHEMA,
+    handler=_handle_get_crypto_price,
+    check_fn=_check_ccxt_available,
+    emoji="₿",
+)
+
+registry.register(
+    name="get_crypto_prices",
+    toolset="trading",
+    schema=_CRYPTO_PRICES_SCHEMA,
+    handler=_handle_get_crypto_prices,
+    check_fn=_check_ccxt_available,
+    emoji="₿",
+)
+
+
+# =============================================================================
+# Hyperliquid Crypto — ccxt (perpetuals)
+# =============================================================================
+
+# Hyperliquid perpetual symbols map (base -> ccxt symbol)
+_HL_SYMBOLS = {
+    "BTC": "BTC/USDC:USDC",
+    "ETH": "ETH/USDC:USDC",
+    "SOL": "SOL/USDC:USDC",
+    "APT": "APT/USDC:USDC",
+    "AR": "AR/USDC:USDC",
+    "AVAX": "AVAX/USDC:USDC",
+    "BNB": "BNB/USDC:USDC",
+    "CRV": "CRV/USDC:USDC",
+    "DOGE": "DOGE/USDC:USDC",
+    "DOT": "DOT/USDC:USDC",
+    "FTM": "FTM/USDC:USDC",
+    "FXS": "FXS/USDC:USDC",
+    "GALA": "GALA/USDC:USDC",
+    "LINK": "LINK/USDC:USDC",
+    "MATIC": "MATIC/USDC:USDC",
+    "OP": "OP/USDC:USDC",
+    "ORDI": "ORDI/USDC:USDC",
+    "PEPE": "PEPE/USDC:USDC",
+    "RDNT": "RDNT/USDC:USDC",
+    "RUNE": "RUNE/USDC:USDC",
+    "SEI": "SEI/USDC:USDC",
+    "SHIB": "SHIB/USDC:USDC",
+    "SNX": "SNX/USDC:USDC",
+    "SOL": "SOL/USDC:USDC",
+    "SUI": "SUI/USDC:USDC",
+    "TIA": "TIA/USDC:USDC",
+    "TRX": "TRX/USDC:USDC",
+    "UNI": "UNI/USDC:USDC",
+    "WIF": "WIF/USDC:USDC",
+    "XRP": "XRP/USDC:USDC",
+}
+
+
+def _get_hyperliquid():
+    """Create Hyperliquid exchange instance (public, no auth)."""
+    import ccxt
+    return ccxt.hyperliquid()
+
+
+def _resolve_hl_symbol(symbol: str) -> str:
+    """Resolve a symbol to Hyperliquid perpetual format.
+
+    Handles: 'BTC', 'BTC/USDC:USDC', 'BTC/USDT:USDT' -> 'BTC/USDC:USDC'
+    """
+    symbol = symbol.strip().upper()
+    if symbol in _HL_SYMBOLS:
+        return _HL_SYMBOLS[symbol]
+    # Already full perpetual symbol
+    if ":" in symbol:
+        return symbol
+    # Strip quote and re-map
+    base = symbol.replace("/USDT", "").replace("/USDC", "")
+    if base in _HL_SYMBOLS:
+        return _HL_SYMBOLS[base]
+    # Fallback: try constructing
+    return f"{base}/USDC:USDC"
+
+
+def _handle_get_hyperliquid_price(args: dict, **kwargs) -> str:
+    """Get current price, funding rate, and order book for a Hyperliquid perpetual."""
+    symbol = args.get("symbol", "").strip().upper()
+    if not symbol:
+        return _json.dumps({"error": "Symbol is required"})
+
+    hl_symbol = _resolve_hl_symbol(symbol)
+
+    try:
+        exchange = _get_hyperliquid()
+        ticker = exchange.fetch_ticker(hl_symbol)
+
+        # Funding rate
+        funding_rate = None
+        funding_next = None
+        try:
+            funding = exchange.fetch_funding_rate(hl_symbol)
+            funding_rate = funding.get("fundingRate")
+            funding_next = funding.get("nextFundingTime")
+        except Exception:
+            pass
+
+        # Order book
+        bid = ask = spread_pct = None
+        try:
+            ob = exchange.fetch_order_book(hl_symbol, limit=1)
+            bid = ob.get("bids", [[None]])[0][0]
+            ask = ob.get("asks", [[None]])[0][0]
+            spread_pct = round((ask - bid) / bid * 100, 4) if bid and ask else None
+        except Exception:
+            pass
+
+        result = {
+            "exchange": "Hyperliquid",
+            "symbol": hl_symbol,
+            "price": ticker.get("last"),
+            "price_formatted": _format_number(ticker.get("last")),
+            "bid": bid,
+            "ask": ask,
+            "spread_pct": spread_pct,
+            "change_24h": ticker.get("change"),
+            "change_pct_24h": ticker.get("percentage"),
+            "volume_24h": ticker.get("quoteVolume"),
+            "high_24h": ticker.get("high"),
+            "low_24h": ticker.get("low"),
+            "timestamp": ticker.get("timestamp"),
+            "funding_rate": funding_rate,
+            "funding_next": funding_next,
+        }
+        return _json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        return _json.dumps({"error": str(e), "symbol": symbol})
+
+
+def _handle_get_hyperliquid_funding(args: dict, **kwargs) -> str:
+    """Get current funding rate for a Hyperliquid perpetual."""
+    symbol = args.get("symbol", "").strip().upper()
+    if not symbol:
+        return _json.dumps({"error": "Symbol is required"})
+
+    hl_symbol = _resolve_hl_symbol(symbol)
+
+    try:
+        exchange = _get_hyperliquid()
+        funding = exchange.fetch_funding_rate(hl_symbol)
+
+        result = {
+            "exchange": "Hyperliquid",
+            "symbol": hl_symbol,
+            "funding_rate": funding.get("fundingRate"),
+            "funding_rate_pct": round(funding.get("fundingRate", 0) * 100, 6),
+            "next_funding_time": funding.get("nextFundingTime"),
+            "timestamp": funding.get("timestamp"),
+        }
+        return _json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        return _json.dumps({"error": str(e), "symbol": symbol})
+
+
+def _handle_get_hyperliquid_orderbook(args: dict, **kwargs) -> str:
+    """Get order book for a Hyperliquid perpetual."""
+    symbol = args.get("symbol", "").strip().upper()
+    limit = min(args.get("limit", 10), 50)  # cap at 50
+
+    if not symbol:
+        return _json.dumps({"error": "Symbol is required"})
+
+    hl_symbol = _resolve_hl_symbol(symbol)
+
+    try:
+        exchange = _get_hyperliquid()
+        ob = exchange.fetch_order_book(hl_symbol, limit=limit)
+
+        result = {
+            "exchange": "Hyperliquid",
+            "symbol": hl_symbol,
+            "bids": ob.get("bids", [])[:limit],
+            "asks": ob.get("asks", [])[:limit],
+            "timestamp": ob.get("timestamp"),
+        }
+        return _json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        return _json.dumps({"error": str(e), "symbol": symbol})
+
+
+# Schemas
+
+_HYPERLIQUID_PRICE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_hyperliquid_price",
+        "description": (
+            "Get current price, 24h stats, funding rate, and order book for a "
+            "Hyperliquid perpetual. Symbols: BTC, ETH, SOL, etc. "
+            "Auto-resolves symbol to Hyperliquid format (e.g. BTC -> BTC/USDC:USDC). "
+            "Returns: last price, bid/ask, spread, 24h change %, volume, high/low, "
+            "funding rate, next funding time. No API key required."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Perpetual symbol (e.g. 'BTC', 'ETH', 'SOL'). Case-insensitive.",
+                },
+            },
+            "required": ["symbol"],
+        },
+    },
+}
+
+_HYPERLIQUID_FUNDING_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_hyperliquid_funding",
+        "description": (
+            "Get current funding rate for a Hyperliquid perpetual. "
+            "Returns funding rate, rate as percentage, and next funding time."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Perpetual symbol (e.g. 'BTC', 'ETH', 'SOL'). Case-insensitive.",
+                },
+            },
+            "required": ["symbol"],
+        },
+    },
+}
+
+_HYPERLIQUID_ORDERBOOK_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_hyperliquid_orderbook",
+        "description": (
+            "Get order book (bids/asks) for a Hyperliquid perpetual. "
+            "Returns top N bids and asks (default 10, max 50)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Perpetual symbol (e.g. 'BTC', 'ETH', 'SOL'). Case-insensitive.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of price levels to return (default 10, max 50).",
+                    "default": 10,
+                },
+            },
+            "required": ["symbol"],
+        },
+    },
+}
+
+
+registry.register(
+    name="get_hyperliquid_price",
+    toolset="trading",
+    schema=_HYPERLIQUID_PRICE_SCHEMA,
+    handler=_handle_get_hyperliquid_price,
+    check_fn=_check_ccxt_available,
+    emoji="🔮",
+)
+
+registry.register(
+    name="get_hyperliquid_funding",
+    toolset="trading",
+    schema=_HYPERLIQUID_FUNDING_SCHEMA,
+    handler=_handle_get_hyperliquid_funding,
+    check_fn=_check_ccxt_available,
+    emoji="🔮",
+)
+
+registry.register(
+    name="get_hyperliquid_orderbook",
+    toolset="trading",
+    schema=_HYPERLIQUID_ORDERBOOK_SCHEMA,
+    handler=_handle_get_hyperliquid_orderbook,
+    check_fn=_check_ccxt_available,
+    emoji="🔮",
+)
+
+
+# =============================================================================
+# OANDA — Forex, Indices, Commodities (REST API v20)
+# =============================================================================
+
+# OANDA instruments supported by this module
+_OANDA_INSTRUMENTS = [
+    # Forex Major
+    "EUR_USD", "GBP_USD", "USD_JPY", "USD_CHF", "AUD_USD", "USD_CAD", "NZD_USD",
+    # Forex Minor
+    "EUR_GBP", "EUR_JPY", "GBP_JPY", "EUR_CHF", "EUR_AUD", "AUD_JPY",
+    "EUR_CAD", "GBP_CHF", "AUD_NZD", "CAD_JPY", "CHF_JPY", "NZD_JPY",
+    # Indices
+    "US30_USD", "US100_USD", "US500_USD", "DE40_EUR", "GB100_GBP", "FR40_EUR",
+    "JP225_USD", "AU200_AUD", "EU50_EUR",
+    # Commodities
+    "XAU_USD", "XAG_USD", "WTICO_USD", "BCO_USD", "NATGAS_USD",
+    "CORN_USD", "WHEAT_USD", "SOYBN_USD",
+    # Crypto (via OANDA conversion)
+    "BTC_USD", "ETH_USD",
+]
+
+# Realistic demo-mode base prices and spreads
+_OANDA_DEMO_DATA = {
+    # Forex Major (base price, spread in pips)
+    "EUR_USD": {"price": 1.08250, "spread_pips": 0.9},
+    "GBP_USD": {"price": 1.26500, "spread_pips": 1.2},
+    "USD_JPY": {"price": 149.850, "spread_pips": 1.0},
+    "USD_CHF": {"price": 0.89200, "spread_pips": 1.3},
+    "AUD_USD": {"price": 0.65100, "spread_pips": 1.1},
+    "USD_CAD": {"price": 1.35800, "spread_pips": 1.2},
+    "NZD_USD": {"price": 0.60300, "spread_pips": 1.3},
+    # Forex Minor
+    "EUR_GBP": {"price": 0.85600, "spread_pips": 1.5},
+    "EUR_JPY": {"price": 162.200, "spread_pips": 1.8},
+    "GBP_JPY": {"price": 189.500, "spread_pips": 2.0},
+    "EUR_CHF": {"price": 0.96550, "spread_pips": 1.6},
+    "EUR_AUD": {"price": 1.66300, "spread_pips": 1.8},
+    "AUD_JPY": {"price": 97.500, "spread_pips": 1.5},
+    # Indices
+    "US30_USD": {"price": 38850.0, "spread_pips": 400},
+    "US100_USD": {"price": 17820.0, "spread_pips": 300},
+    "US500_USD": {"price": 5248.0, "spread_pips": 150},
+    "DE40_EUR": {"price": 18420.0, "spread_pips": 350},
+    # Commodities
+    "XAU_USD": {"price": 2345.50, "spread_pips": 25},
+    "XAG_USD": {"price": 29.850, "spread_pips": 30},
+    "WTICO_USD": {"price": 82.15, "spread_pips": 35},
+    "NATGAS_USD": {"price": 2.850, "spread_pips": 30},
+    "CORN_USD": {"price": 449.50, "spread_pips": 25},
+    "WHEAT_USD": {"price": 567.25, "spread_pips": 30},
+    # Crypto
+    "BTC_USD": {"price": 63500.0, "spread_pips": 1500},
+    "ETH_USD": {"price": 3480.0, "spread_pips": 80},
+}
+
+
+def _oanda_is_configured() -> bool:
+    """Check if OANDA API credentials are configured via environment."""
+    return bool(os.getenv("OANDA_API_KEY") and os.getenv("OANDA_ACCOUNT_ID"))
+
+
+def _oanda_headers(api_key: str) -> dict:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+
+def _oanda_pricing_url(account_id: str, instruments: list[str]) -> str:
+    ids = ",".join(instruments)
+    return (
+        f"https://api-fxpractice.oanda.com/v3/accounts/{account_id}/pricing"
+        f"?instruments={ids}"
+    )
+
+
+def _oanda_instruments_url(account_id: str) -> str:
+    return f"https://api-fxpractice.oanda.com/v3/accounts/{account_id}/instruments"
+
+
+def _fetch_oanda_prices(instruments: list[str]) -> dict | str:
+    """Fetch live prices from OANDA API. Returns dict or error string."""
+    api_key = os.getenv("OANDA_API_KEY", "")
+    account_id = os.getenv("OANDA_ACCOUNT_ID", "")
+    url = _oanda_pricing_url(account_id, instruments)
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(url, headers=_oanda_headers(api_key))
+            if resp.status_code == 401:
+                return "[Error: OANDA API key inválida o vencida]"
+            if resp.status_code == 403:
+                return "[Error: OANDA — sin permisos para esta cuenta]"
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        return f"[Error HTTP {e.response.status_code}: {e}]"
+    except Exception as e:
+        return f"[Error: {e}]"
+
+
+def _build_demo_price(instrument: str, demo_base: dict) -> dict:
+    """Build a realistic mock OANDA pricing response for one instrument."""
+    import random
+    price = demo_base["price"]
+    spread_pips = demo_base["spread_pips"]
+
+    # Add tiny realistic drift
+    drift = random.uniform(-0.0003, 0.0003) * price
+    price += drift
+
+    # Convert spread pips to price units (1 pip = 0.0001 for forex, 0.01 for JPY, 0.01 for indices, 0.01 for commodities)
+    if "_JPY" in instrument or "JPY" in instrument:
+        pip = 0.01
+    elif "US30" in instrument or "US100" in instrument or "US500" in instrument:
+        pip = 1.0
+    elif "DE40" in instrument or "GB100" in instrument or "FR40" in instrument or "EU50" in instrument:
+        pip = 0.1
+    elif "XAU" in instrument:
+        pip = 0.01  # gold quoted in cents
+    elif "XAG" in instrument:
+        pip = 0.005
+    elif "WTICO" in instrument or "BCO" in instrument:
+        pip = 0.01
+    elif "NATGAS" in instrument:
+        pip = 0.001
+    elif "CORN" in instrument or "WHEAT" in instrument or "SOYBN" in instrument:
+        pip = 0.25
+    else:
+        pip = 0.0001
+
+    half_spread = (spread_pips * pip) / 2
+    bid = round(price - half_spread, 5)
+    ask = round(price + half_spread, 5)
+
+    return {
+        "instrument": instrument,
+        "tradeable": True,
+        "bids": [{"price": bid, "liquidity": 10_000_000}],
+        "asks": [{"price": ask, "liquidity": 10_000_000}],
+        "closeoutBid": bid,
+        "closeoutAsk": ask,
+        "time": f"{datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')}",
+    }
+
+
+def _demo_pricing_response(instruments: list[str]) -> dict:
+    """Build a mock OANDA /pricing response for demo mode."""
+    prices = []
+    for inst in instruments:
+        inst_norm = inst.replace("_", "_")
+        if inst_norm in _OANDA_DEMO_DATA:
+            prices.append(_build_demo_price(inst_norm, _OANDA_DEMO_DATA[inst_norm]))
+        else:
+            # Fallback generic
+            prices.append(_build_demo_price(inst_norm, {"price": 1.0, "spread_pips": 2}))
+    return {"prices": prices}
+
+
+# --- OANDA Handlers ---
+
+def _handle_get_oanda_price(args: dict, **kwargs) -> str:
+    """Get current price for one or more OANDA instruments (Forex, Indices, Commodities)."""
+    instrument = args.get("instrument", "").strip().upper()
+    if not instrument:
+        return _json.dumps({"error": "instrument es requerido"})
+
+    # Normalize OANDA format (EUR_USD)
+    normalized = instrument.replace("/", "_").replace("=", "_")
+
+    if not _oanda_is_configured():
+        # Demo mode
+        prices = _demo_pricing_response([normalized])["prices"]
+        if not prices:
+            return _json.dumps({"error": f"Instrumento no soportado en demo: {instrument}"})
+        p = prices[0]
+        return _json.dumps({
+            "source": "OANDA (Demo Mode)",
+            "instrument": normalized,
+            "price": round((p["bids"][0]["price"] + p["asks"][0]["price"]) / 2, 5),
+            "bid": p["bids"][0]["price"],
+            "ask": p["asks"][0]["price"],
+            "spread_pips": _OANDA_DEMO_DATA.get(normalized, {}).get("spread_pips", "?"),
+            "time": p["time"],
+        }, ensure_ascii=False)
+
+    data = _fetch_oanda_prices([normalized])
+    if isinstance(data, str):
+        return _json.dumps({"error": data})
+
+    prices = data.get("prices", [])
+    if not prices:
+        return _json.dumps({"error": f"No se encontró precio para {instrument}"})
+
+    p = prices[0]
+    mid = (p["bids"][0]["price"] + p["asks"][0]["price"]) / 2
+    return _json.dumps({
+        "source": "OANDA",
+        "instrument": p["instrument"],
+        "price": mid,
+        "bid": p["bids"][0]["price"],
+        "ask": p["asks"][0]["price"],
+        "spread": round(p["asks"][0]["price"] - p["bids"][0]["price"], 5),
+        "time": p["time"],
+    }, ensure_ascii=False)
+
+
+def _handle_get_oanda_prices(args: dict, **kwargs) -> str:
+    """Get current prices for multiple OANDA instruments at once."""
+    instruments = args.get("instruments", [])
+    if not instruments:
+        return _json.dumps({"error": "instruments es requerido (lista de instrumentos OANDA)"})
+
+    normalized = [i.strip().replace("/", "_").replace("=", "_") for i in instruments]
+
+    if not _oanda_is_configured():
+        prices = _demo_pricing_response(normalized)["prices"]
+        result = []
+        for p in prices:
+            inst = p["instrument"]
+            demo = _OANDA_DEMO_DATA.get(inst, {})
+            result.append({
+                "source": "OANDA (Demo Mode)",
+                "instrument": inst,
+                "price": round((p["bids"][0]["price"] + p["asks"][0]["price"]) / 2, 5),
+                "bid": p["bids"][0]["price"],
+                "ask": p["asks"][0]["price"],
+                "spread_pips": demo.get("spread_pips", "?"),
+                "time": p["time"],
+            })
+        return _json.dumps(result, ensure_ascii=False)
+
+    data = _fetch_oanda_prices(normalized)
+    if isinstance(data, str):
+        return _json.dumps({"error": data})
+
+    return _json.dumps(data.get("prices", []), ensure_ascii=False)
+
+
+def _handle_list_oanda_instruments(args: dict, **kwargs) -> str:
+    """List all available OANDA instruments for the account."""
+    if not _oanda_is_configured():
+        # Return static list in demo mode
+        return _json.dumps({
+            "source": "OANDA (Demo Mode)",
+            "instruments": _OANDA_INSTRUMENTS,
+            "count": len(_OANDA_INSTRUMENTS),
+        }, ensure_ascii=False)
+
+    account_id = os.getenv("OANDA_ACCOUNT_ID", "")
+    api_key = os.getenv("OANDA_API_KEY", "")
+    url = _oanda_instruments_url(account_id)
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(url, headers=_oanda_headers(api_key))
+            resp.raise_for_status()
+            data = resp.json()
+            instruments = [i["name"] for i in data.get("instruments", []) if i.get("tradeable")]
+            return _json.dumps({
+                "source": "OANDA",
+                "instruments": instruments,
+                "count": len(instruments),
+            }, ensure_ascii=False)
+    except Exception as e:
+        return _json.dumps({"error": str(e)})
+
+
+# --- OANDA Schemas ---
+
+_OANDA_PRICE_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_oanda_price",
+        "description": (
+            "Get live price for one OANDA instrument (Forex, Index, Commodity, Crypto). "
+            "Supports: EUR_USD, GBP_USD, USD_JPY, AUD_USD, USD_CAD, NZD_USD, "
+            "US30_USD, US100_USD, US500_USD, DE40_EUR, XAU_USD, XAG_USD, WTICO_USD, NATGAS_USD, BTC_USD, ETH_USD, etc. "
+            "Demo mode (no API key) returns realistic mock data."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "instrument": {
+                    "type": "string",
+                    "description": "OANDA instrument ID (e.g. 'EUR_USD', 'XAU_USD', 'US500_USD'). Case-insensitive.",
+                },
+            },
+            "required": ["instrument"],
+        },
+    },
+}
+
+_OANDA_PRICES_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "get_oanda_prices",
+        "description": (
+            "Get live prices for multiple OANDA instruments at once. "
+            "More efficient than calling get_oanda_price repeatedly. "
+            "Demo mode (no API key) returns realistic mock data."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "instruments": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of OANDA instrument IDs (e.g. ['EUR_USD', 'XAU_USD', 'US500_USD']).",
+                },
+            },
+            "required": ["instruments"],
+        },
+    },
+}
+
+_OANDA_INSTRUMENTS_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "list_oanda_instruments",
+        "description": (
+            "List all tradeable instruments available on the OANDA account. "
+            "In demo mode (no API key) returns the full supported instrument list."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+}
+
+
+def _check_oanda_available() -> bool:
+    """OANDA tools are available if API key is set OR if in demo mode (always available)."""
+    return True  # Always available; demo mode handles missing credentials
+
+
+registry.register(
+    name="get_oanda_price",
+    toolset="trading",
+    schema=_OANDA_PRICE_SCHEMA,
+    handler=_handle_get_oanda_price,
+    check_fn=_check_oanda_available,
+    emoji="🌊",
+)
+
+registry.register(
+    name="get_oanda_prices",
+    toolset="trading",
+    schema=_OANDA_PRICES_SCHEMA,
+    handler=_handle_get_oanda_prices,
+    check_fn=_check_oanda_available,
+    emoji="🌊",
+)
+
+registry.register(
+    name="list_oanda_instruments",
+    toolset="trading",
+    schema=_OANDA_INSTRUMENTS_SCHEMA,
+    handler=_handle_list_oanda_instruments,
+    check_fn=_check_oanda_available,
+    emoji="🌊",
+)

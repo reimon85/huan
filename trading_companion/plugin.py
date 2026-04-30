@@ -11,6 +11,7 @@ from trading_companion.tools import (  # noqa: F401
     strategy_tools,
     screener_tools,
     loris_tools,
+    heartbeat_tools,
 )
 
 
