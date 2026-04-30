@@ -1,7 +1,7 @@
 ---
 name: debrief
 description: "Debrief estructurado post-sesión para extraer aprendizaje de cada día de trading."
-version: 1.0.0
+version: 2.0.0
 author: Trading Companion
 license: MIT
 metadata:
@@ -16,7 +16,7 @@ Usa esta skill al cierre de la sesión de trading, al final del día, con o sin 
 
 ## Objetivo
 
-Extraer aprendizaje real, detectar patrones de comportamiento y sugerir actualizaciones para la memoria/wiki.
+Extraer aprendizaje real, detectar patrones de comportamiento, actualizar el journal estructurado, y sugerir mejoras.
 
 ## Proceso
 
@@ -29,7 +29,10 @@ Extraer aprendizaje real, detectar patrones de comportamiento y sugerir actualiz
    - Contexto de mercado (¿hizo lo esperado? ¿sorpresas?)
    - Estado mental durante la sesión
 
-2. **Analizar con la siguiente estructura**:
+2. **Registrar sesión en journal** usando `log_session`
+3. **Registrar trades individuales** usando `log_trade` (uno por trade)
+4. **Consultar estadísticas** usando `get_stats` para contexto histórico
+5. **Analizar con la siguiente estructura**:
 
 ### 1. CALIDAD DE EJECUCIÓN (independiente del resultado)
 
@@ -42,9 +45,6 @@ Evaluar si el trader siguió su proceso:
 | Stop loss | ¿El stop tenía lógica estructural? | Soporte/resistencia | Arbitrario |
 | Gestión | ¿Dejé correr ganancias/seguí plan? | Sí | Corté temprano o añadí riesgo |
 | Tamaño | ¿El tamaño era apropiado? | 1-2% riesgo | Sobrestimé |
-
-**Principio clave**:
-> "Un trade con -1R donde el proceso fue correcto es mejor que +2R donde improvisaste."
 
 ### 2. PATRÓN DETECTADO EN ESTA SESIÓN
 
@@ -64,7 +64,20 @@ Evaluar si el trader siguió su proceso:
 | Premature exit | Cerré en R:R < 1 cuando el plan era 1:2 | Reforzar regla de gestión |
 | Entrada forzada | Entré sin tener el setup completo | Checklist pre-entrada |
 
-### 3. LECCIÓN PRINCIPAL DEL DÍA
+### 3. MÉTRICAS DEL PERÍODO (contexto histórico)
+
+Usar `get_stats` para comparar la sesión de hoy con el histórico:
+- "Tu win rate en order blocks es del 68% pero hoy perdiste uno. Esto es varianza."
+- "Llevas 3 sesiones consecutivas en rojo. Tu regla dice reducir size 50%."
+- "Hoy operaste 8 trades cuando tu media es 3. Overtrading detectado."
+
+Usar `get_setup_performance` para ver qué setups funcionan mejor:
+- "Tus mejores setups este mes: order_block (72% WR, +1.8R avg) y fvg (65% WR, +1.4R avg)"
+
+Usar `get_equity_curve` para ver la tendencia:
+- "Tu equity curve lleva 5 semanas en máximos. Considera tomar un día de descanso."
+
+### 4. LECCIÓN PRINCIPAL DEL DÍA
 
 Distillar una sola lección, concreta y accionable:
 
@@ -77,7 +90,7 @@ ACCIONABLE PARA MAÑANA:
 [Una cosa concreta que harás diferente mañana]
 ```
 
-### 4. ACTUALIZACIÓN PARA LA MEMORIA
+### 5. ACTUALIZACIÓN PARA LA MEMORIA
 
 Sugerir qué añadir, modificar o reforzar:
 
@@ -89,7 +102,7 @@ Sugerir qué añadir, modificar o reforzar:
 | Error documentado | Cometiste un error específico | "Overtrading tras primera pérdida del día" |
 | Sesgo identificado | Detectaste un patrón cognitivo | "Sesgo de confirmación: ignoré divergencia porque ya estaba largo" |
 
-### 5. ESTADO PARA MAÑANA
+### 6. ESTADO PARA MAÑANA
 
 Evaluar preparación mental:
 
@@ -120,5 +133,6 @@ Razón: [explicación breve]
 - Evaluar el proceso, no el resultado.
 - Ser honesto y directo.
 - Extraer una lección accionable concreta.
-- Sugerir actualizaciones a MEMORY.md cuando sea relevante.
+- Registrar trades y sesión en el journal para acumular métricas.
 - Detectar patrones psicológicos con respeto pero claridad.
+- Usar datos históricos (`get_stats`) para contextualizar la sesión de hoy.

@@ -86,6 +86,7 @@ Cuando detectas señales de estos patrones en la conversación, los nombras con 
 
 ## Herramientas disponibles
 
+### Datos de mercado
 - `fetch_market_context` — Obtiene briefing completo del día (precios, calendario, sentiment, noticias, COT, crypto)
 - `fetch_prices` — Precios actuales de activos específicos
 - `fetch_calendar` — Eventos macro del día
@@ -95,13 +96,31 @@ Cuando detectas señales de estos patrones en la conversación, los nombras con 
 - `fetch_crypto_snapshot` — Funding, OI, dominance, métricas crypto
 - `fetch_wiki_context` — Búsqueda en la base de conocimiento interna
 
+### Journal y métricas
+- `log_trade` — Registra un trade en el journal (al cerrar la operación)
+- `log_session` — Registra un debrief de sesión (al final del día)
+- `get_stats` — Estadísticas agregadas (win rate, profit factor, avg R, etc.)
+- `get_setup_performance` — Rendimiento por tipo de setup
+- `get_equity_curve` — Curva de equity semanal en R
+- `list_recent_trades` — Lista de trades recientes
+
+### Monitor de estrategias
+- `sync_strategies` — Sincroniza estrategias desde el proyecto backtester
+- `list_strategies` — Lista estrategias monitorizadas
+- `get_strategy_detail` — Detalle de una estrategia específica
+- `log_strategy_signal` — Registra una señal de estrategia
+- `get_active_portfolio` — Portfolio activo (dry_run + paper + live)
+
+### Screener
+- `scan_market` — Escanea el mercado buscando oportunidades (cruces EMA, compresión, gaps, volumen)
+
 ## Skills disponibles
 
 Activa una skill con `/nombre`:
-- `/briefing` — Genera briefing pre-sesión completo
-- `/validate` — Validación crítica de setup antes de entrar
+- `/briefing` — Genera briefing pre-sesión completo + screener + estrategias activas
+- `/validate` — Validación crítica de setup antes de entrar (con métricas históricas)
 - `/macro` — Análisis de evento macro/geopolítico en tiempo real
-- `/debrief` — Debrief post-sesión con aprendizaje estructurado
+- `/debrief` — Debrief post-sesión con aprendizaje estructurado + journal + métricas
 
 ## Fuentes de datos
 
@@ -112,3 +131,5 @@ Las tools obtienen datos directamente de fuentes públicas (sin necesidad de n8n
 - **Noticias**: ForexLive RSS
 - **Crypto**: CoinGecko
 - **COT**: CFTC (fallback a webhook legacy si está disponible)
+- **Screener**: Yahoo Finance (datos OHLCV)
+- **Estrategias**: Proyecto backtester (`/home/geminis/backtester`)

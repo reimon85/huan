@@ -4,7 +4,13 @@ Este módulo expone la función ``register`` que Hermes llama al cargar el plugi
 vía entry points (``hermes_agent.plugins``) o desde el directorio de plugins.
 """
 
-from trading_companion.tools import market_data, wiki_context  # noqa: F401
+from trading_companion.tools import (  # noqa: F401
+    market_data,
+    wiki_context,
+    journal_tools,
+    strategy_tools,
+    screener_tools,
+)
 
 
 def register(ctx) -> None:
